@@ -91,41 +91,89 @@ class WebSocketServer:
         Args:
             mensagem: Dicionário com dados da mensagem.
         """
-        if not self.running or not self.loop:
+        if not self.running:
+            print("⚠️ WebSocket não está rodando. Mensagem não enviada.")
             return
         
-        if self.loop.is_running():
-            try:
-                asyncio.run_coroutine_threadsafe(
-                    self._broadcast_async(mensagem),
-                    self.loop
-                )
-            except Exception as e:
-                print(f"Erro ao enviar mensagem via WebSocket: {e}")
+        if not self.loop:
+            print("⚠️ Loop do WebSocket não inicializado.")
+            return
+        
+        if not self.loop.is_running():
+            print("⚠️ Loop do WebSocket não está rodando.")
+            return
+        
+        if not self.clients:
+            print("⚠️ Nenhum cliente conectado ao WebSocket.")
+            return
+        
+        try:
+            asyncio.run_coroutine_threadsafe(
+                self._broadcast_async(mensagem),
+                self.loop
+            )
+            print(f"📤 Mensagem enviada para {len(self.clients)} cliente(s)")
+        except Exception as e:
+            print(f"❌ Erro ao enviar mensagem via WebSocket: {e}")
+            import traceback
+            traceback.print_exc()
     
     def _iniciar_servidor(self):
         """Inicia o servidor WebSocket em loop assíncrono."""
-        self.loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(self.loop)
-        
-        async def iniciar():
-            try:
-                self.server = await websockets.serve(
-                    self._servidor_handler,
-                    self.host,
-                    self.port
-                )
-                print(f"🌐 Servidor WebSocket iniciado em ws://{self.host}:{self.port}")
-                print(f"📱 Abra o arquivo 'cliente_enfermeiro.html' no navegador para visualizar as notificações")
-                self.running = True
-            except Exception as e:
-                print(f"❌ Erro ao iniciar servidor WebSocket: {e}")
-                self.running = False
-                return
-        
-        self.loop.run_until_complete(iniciar())
-        if self.running:
-            self.loop.run_forever()
+        try:
+            self.loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(self.loop)
+            
+            async def iniciar():
+                try:
+                    self.server = await websockets.serve(
+                        self._servidor_handler,
+                        self.host,
+                        self.port,
+                        ping_interval=20,
+                        ping_timeout=10
+                    )
+                    print(f"🌐 Servidor WebSocket iniciado em ws://{self.host}:{self.port}")
+                    print(f"📱 Abra o arquivo 'cliente_enfermeiro.html' no navegador para visualizar as notificações")
+                    print(f"✅ Servidor pronto para receber conexões")
+                    self.running = True
+                except OSError as e:
+                    if "Address already in use" in str(e) or "address is already in use" in str(e).lower():
+                        print(f"⚠️ Porta {self.port} já está em uso. Tentando usar porta alternativa...")
+                        # Tenta porta alternativa
+                        self.port = self.port + 1
+                        try:
+                            self.server = await websockets.serve(
+                                self._servidor_handler,
+                                self.host,
+                                self.port
+                            )
+                            print(f"🌐 Servidor WebSocket iniciado em ws://{self.host}:{self.port}")
+                            print(f"📱 Atualize a URL no cliente_enfermeiro.html para ws://{self.host}:{self.port}")
+                            self.running = True
+                        except Exception as e2:
+                            print(f"❌ Erro ao iniciar servidor WebSocket na porta alternativa: {e2}")
+                            self.running = False
+                    else:
+                        print(f"❌ Erro ao iniciar servidor WebSocket: {e}")
+                        import traceback
+                        traceback.print_exc()
+                        self.running = False
+                except Exception as e:
+                    print(f"❌ Erro ao iniciar servidor WebSocket: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    self.running = False
+                    return
+            
+            self.loop.run_until_complete(iniciar())
+            if self.running:
+                self.loop.run_forever()
+        except Exception as e:
+            print(f"❌ Erro crítico ao iniciar servidor WebSocket: {e}")
+            import traceback
+            traceback.print_exc()
+            self.running = False
     
     def iniciar(self):
         """

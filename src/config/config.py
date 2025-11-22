@@ -53,6 +53,13 @@ class Config:
     PACIENTE_NOME = "João Silva"
     PACIENTE_QUARTO = "201"
     
+    # Gesto de confirmação/envio (joia = polegar + indicador formando círculo)
+    # Representado como (4, 8) - polegar e indicador
+    GESTO_JOIA_CONFIRMACAO = (4, 8)
+    
+    # Debounce para evitar envios múltiplos do mesmo gesto
+    DEBOUNCE_TEMPO_SEGUNDOS = 2  # Aguarda 2 segundos antes de aceitar o mesmo gesto novamente
+    
     @classmethod
     def ensure_data_file_exists(cls):
         """Garante que o arquivo CSV existe."""

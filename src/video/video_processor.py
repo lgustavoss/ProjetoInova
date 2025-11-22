@@ -13,7 +13,7 @@ from src.config.config import Config
 class VideoProcessor:
     """Processa vídeo da câmera e detecta gestos."""
     
-    def __init__(self, camera_index: int = None, callback_gesto: Optional[Callable] = None, callback_frame: Optional[Callable] = None):
+    def __init__(self, camera_index: int = None, callback_gesto: Optional[Callable] = None, callback_frame: Optional[Callable] = None, callback_joia: Optional[Callable] = None):
         """
         Inicializa o processador de vídeo.
         
@@ -23,10 +23,12 @@ class VideoProcessor:
                             Recebe (chave, dedos_estendidos, indice_mao) como argumentos.
             callback_frame: Função chamada para cada frame processado.
                             Recebe (frame_bgr) como argumento.
+            callback_joia: Função chamada quando gesto joia é detectado (confirmação/envio).
         """
         self.camera_index = camera_index or Config.CAMERA_INDEX
         self.callback_gesto = callback_gesto
         self.callback_frame = callback_frame
+        self.callback_joia = callback_joia
         self.cap: Optional[cv2.VideoCapture] = None
         self.detector = GestureDetector()
         self.mp_draw = mp.solutions.drawing_utils
@@ -34,6 +36,7 @@ class VideoProcessor:
         self.running = False
         self.thread: Optional[threading.Thread] = None
         self.show_opencv_window = Config.SHOW_OPENCV_WINDOW
+        self.ultimo_gesto_detectado = None  # Armazena último gesto para envio com joia
     
     def iniciar(self):
         """Inicia a captura de vídeo."""
@@ -68,26 +71,49 @@ class VideoProcessor:
                         self.mp_hands.HAND_CONNECTIONS
                     )
                     
-                    # Detecta gesto
-                    chave, dedos_estendidos = self.detector.detectar_gesto(
-                        hand_landmarks.landmark
-                    )
+                    # Verifica se é gesto joia (confirmação/envio)
+                    is_joia = self.detector.detectar_gesto_joia(hand_landmarks.landmark)
                     
-                    # Chama callback se fornecido
-                    if self.callback_gesto:
-                        self.callback_gesto(chave, dedos_estendidos, idx)
-                    
-                    # Exibe informação na imagem
-                    texto = f"Mão {idx+1}: {chave}"
-                    cv2.putText(
-                        img,
-                        texto,
-                        (10, 70 + idx * 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 255, 0),
-                        2
-                    )
+                    if is_joia:
+                        # Gesto joia detectado - chama callback de confirmação
+                        if self.callback_joia and self.ultimo_gesto_detectado:
+                            self.callback_joia(self.ultimo_gesto_detectado)
+                        
+                        # Exibe informação na imagem
+                        texto = f"Mão {idx+1}: 👍 JOIA (Enviando...)"
+                        cv2.putText(
+                            img,
+                            texto,
+                            (10, 70 + idx * 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 255, 255),  # Amarelo para joia
+                            2
+                        )
+                    else:
+                        # Detecta gesto normal
+                        chave, dedos_estendidos = self.detector.detectar_gesto(
+                            hand_landmarks.landmark
+                        )
+                        
+                        # Armazena último gesto detectado
+                        self.ultimo_gesto_detectado = (chave, dedos_estendidos, idx)
+                        
+                        # Chama callback se fornecido
+                        if self.callback_gesto:
+                            self.callback_gesto(chave, dedos_estendidos, idx)
+                        
+                        # Exibe informação na imagem
+                        texto = f"Mão {idx+1}: {chave}"
+                        cv2.putText(
+                            img,
+                            texto,
+                            (10, 70 + idx * 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 255, 0),
+                            2
+                        )
             
             # Chama callback de frame se fornecido (para exibir na UI)
             if self.callback_frame:

@@ -2,6 +2,7 @@
 Detector de gestos usando MediaPipe.
 """
 
+import math
 from typing import Tuple, List, Optional
 import mediapipe as mp
 
@@ -58,6 +59,35 @@ class GestureDetector:
             dedos_estendidos.append(4)
         
         return dedos_estendidos
+    
+    def detectar_gesto_joia(self, landmarks) -> bool:
+        """
+        Detecta se o gesto é "joia" (polegar e indicador formando círculo).
+        
+        Args:
+            landmarks: Lista de landmarks da mão do MediaPipe.
+            
+        Returns:
+            True se for gesto joia, False caso contrário.
+        """
+        try:
+            # Pontos do polegar e indicador
+            thumb_tip = landmarks[4]  # Polegar ponta
+            thumb_ip = landmarks[3]   # Polegar articulação
+            index_tip = landmarks[8]  # Indicador ponta
+            index_pip = landmarks[6]  # Indicador articulação
+            
+            # Calcula distância entre ponta do polegar e ponta do indicador
+            distancia = math.sqrt(
+                (thumb_tip.x - index_tip.x) ** 2 + 
+                (thumb_tip.y - index_tip.y) ** 2
+            )
+            
+            # Se a distância for pequena (polegar e indicador próximos), é joia
+            # Threshold ajustável (0.05 é uma boa distância para gesto joia)
+            return distancia < 0.05
+        except:
+            return False
     
     def detectar_gesto(self, landmarks) -> Tuple[Tuple[int, ...], List[int]]:
         """

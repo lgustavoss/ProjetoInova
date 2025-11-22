@@ -5,6 +5,7 @@ Ponto de entrada principal da aplicação.
 
 import sys
 import threading
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -22,6 +23,8 @@ from src.config.config import Config
 def main():
     """Função principal da aplicação."""
     websocket_server = None
+    ultimo_gesto_enviado = None
+    ultimo_tempo_envio = 0
     
     try:
         # Inicializa componentes
@@ -41,9 +44,14 @@ def main():
                     daemon=True
                 )
                 thread_websocket.start()
+                # Aguarda um pouco para o servidor iniciar
+                time.sleep(0.5)
                 print(f"✅ WebSocket habilitado. Enfermeiros podem conectar em ws://{Config.WEBSOCKET_HOST}:{Config.WEBSOCKET_PORT}")
+                print(f"📱 Abra o arquivo 'cliente_enfermeiro.html' no navegador")
             except Exception as e:
                 print(f"⚠️ Erro ao iniciar WebSocket: {e}")
+                import traceback
+                traceback.print_exc()
                 print("   Aplicação continuará sem WebSocket.")
                 websocket_server = None
         
@@ -52,7 +60,7 @@ def main():
             """Callback chamado para cada frame processado."""
             janela.atualizar_frame_video(frame_bgr)
         
-        # Callback para quando um gesto é detectado (apenas mostra, não envia)
+        # Callback para quando um gesto é detectado (apenas mostra na tela)
         def on_gesto_detectado(chave, dedos_estendidos, indice_mao):
             mensagem = repositorio.obter_mensagem(chave)
             
@@ -61,13 +69,28 @@ def main():
             else:
                 mensagem_exibida = f"Gesto não reconhecido: {chave}"
             
-            # Atualiza interface e pede confirmação (não envia automaticamente)
+            # Atualiza interface (apenas mostra, não envia ainda)
             janela.atualizar_gesto_atual(chave, mensagem_exibida)
         
-        # Callback para enviar gesto confirmado pelo paciente
-        def on_enviar_gesto_confirmado(chave, mensagem):
-            """Envia gesto confirmado pelo paciente via WebSocket."""
-            if websocket_server:
+        # Callback para gesto joia (confirmação/envio automático)
+        def on_gesto_joia_detectado(gesto_info):
+            """Envia automaticamente quando gesto joia é detectado."""
+            chave, dedos_estendidos, indice_mao = gesto_info
+            mensagem = repositorio.obter_mensagem(chave)
+            
+            if not mensagem:
+                # Gesto não reconhecido
+                janela.mostrar_mensagem_temporaria("⚠️ Gesto não reconhecido. Faça um gesto válido primeiro.", "aviso")
+                return
+            
+            # Debounce: evita envios múltiplos do mesmo gesto
+            tempo_atual = time.time()
+            if (ultimo_gesto_enviado == chave and 
+                tempo_atual - ultimo_tempo_envio < Config.DEBOUNCE_TEMPO_SEGUNDOS):
+                return
+            
+            # Envia via WebSocket
+            if websocket_server and websocket_server.running:
                 prioridade = "alta" if audio_handler.verificar_mensagem_critica(mensagem) else "normal"
                 websocket_server.broadcast({
                     "tipo": "gesto",
@@ -76,15 +99,23 @@ def main():
                     "prioridade": prioridade,
                     "timestamp": datetime.now().strftime("%H:%M:%S")
                 })
-                print(f"📤 Gesto enviado: {mensagem} (Prioridade: {prioridade})")
-        
-        # Configura callback de envio na janela
-        janela.callback_enviar_gesto = on_enviar_gesto_confirmado
+                
+                # Atualiza controle de debounce
+                ultimo_gesto_enviado = chave
+                ultimo_tempo_envio = tempo_atual
+                
+                # Feedback visual
+                janela.mostrar_mensagem_temporaria(f"✅ Enviado: {mensagem}", "sucesso")
+                print(f"📤 Gesto enviado automaticamente: {mensagem} (Prioridade: {prioridade})")
+            else:
+                janela.mostrar_mensagem_temporaria("⚠️ WebSocket não conectado. Verifique a conexão.", "erro")
+                print("⚠️ WebSocket não está rodando. Não foi possível enviar.")
         
         # Inicializa processador de vídeo
         processador_video = VideoProcessor(
             callback_gesto=on_gesto_detectado,
-            callback_frame=on_frame_processado
+            callback_frame=on_frame_processado,
+            callback_joia=on_gesto_joia_detectado
         )
         processador_video.iniciar()
         

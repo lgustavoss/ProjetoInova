@@ -66,59 +66,54 @@ class MainWindow:
         )
         self.canvas_video.pack(pady=10)
         
-        # Painel de confirmação de gesto
-        self.frame_confirmacao = tk.Frame(left_frame, bg='#e8f5e9', relief=tk.RAISED, bd=2)
-        self.frame_confirmacao.pack(fill="x", pady=10, padx=5)
+        # Painel de status do gesto detectado
+        self.frame_status_gesto = tk.Frame(left_frame, bg='#e8f5e9', relief=tk.RAISED, bd=2)
+        self.frame_status_gesto.pack(fill="x", pady=10, padx=5)
         
         self.label_gesto_detectado = tk.Label(
-            self.frame_confirmacao,
-            text="Aguardando gesto...",
+            self.frame_status_gesto,
+            text="👋 Faça um gesto para começar\n\n💡 Dica: Faça gesto 'joia' (👍) para enviar automaticamente",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
             bg='#e8f5e9',
-            wraplength=600
+            wraplength=600,
+            justify=tk.CENTER
         )
         self.label_gesto_detectado.pack(pady=10)
         
-        self.frame_botoes_confirmacao = tk.Frame(self.frame_confirmacao, bg='#e8f5e9')
-        self.frame_botoes_confirmacao.pack(pady=5)
-        
-        self.btn_enviar = tk.Button(
-            self.frame_botoes_confirmacao,
-            text="✅ Enviar para Enfermeiros",
-            command=self._on_enviar_gesto,
-            bg='#4caf50',
-            fg='white',
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold"),
-            state=tk.DISABLED,
-            padx=20,
-            pady=10
+        # Instruções
+        self.label_instrucoes = tk.Label(
+            left_frame,
+            text="📌 Instruções:\n1. Faça um gesto com a mão\n2. Faça gesto 'joia' (👍) para enviar",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
+            bg='#f0f0f0',
+            fg='#666',
+            justify=tk.LEFT
         )
-        self.btn_enviar.pack(side="left", padx=5)
-        
-        self.btn_cancelar = tk.Button(
-            self.frame_botoes_confirmacao,
-            text="❌ Cancelar",
-            command=self._on_cancelar_gesto,
-            bg='#f44336',
-            fg='white',
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
-            state=tk.DISABLED,
-            padx=20,
-            pady=10
-        )
-        self.btn_cancelar.pack(side="left", padx=5)
+        self.label_instrucoes.pack(pady=5)
         
         # Coluna direita: Gestos disponíveis e configurações
         right_frame = tk.Frame(main_container, bg='#f0f0f0')
         right_frame.pack(side="right", fill="both", expand=False, padx=5)
         
         # Título dos gestos disponíveis
+        titulo_frame = tk.Frame(right_frame, bg='#f0f0f0')
+        titulo_frame.pack(fill="x", pady=5)
+        
         tk.Label(
-            right_frame,
-            text="📋 Gestos Disponíveis",
+            titulo_frame,
+            text="📋 Legenda de Gestos",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_LARGE, "bold"),
             bg='#f0f0f0'
-        ).pack(pady=5)
+        ).pack(side="left")
+        
+        tk.Label(
+            titulo_frame,
+            text="👍 = Enviar",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
+            bg='#f0f0f0',
+            fg='#4caf50',
+            fg='#4caf50'
+        ).pack(side="right", padx=5)
         
         # Frame scrollável para gestos
         frame_scroll = tk.Frame(right_frame, bg='#f0f0f0')
@@ -287,7 +282,7 @@ class MainWindow:
     
     def atualizar_gesto_atual(self, chave: tuple, mensagem: str):
         """
-        Atualiza o gesto atual e pede confirmação antes de enviar.
+        Atualiza o gesto atual detectado (apenas mostra, não envia).
         
         Args:
             chave: Chave do gesto detectado.
@@ -295,7 +290,7 @@ class MainWindow:
         """
         self.gesto_atual = chave
         
-        # Se gesto foi reconhecido (tem mensagem), pede confirmação
+        # Se gesto foi reconhecido (tem mensagem), mostra na tela
         if mensagem and not mensagem.startswith("Gesto não reconhecido"):
             self.gesto_pendente = (chave, mensagem)
             
@@ -305,17 +300,13 @@ class MainWindow:
             cor_texto = '#c62828' if is_critico else '#2e7d32'
             emoji = '🔴' if is_critico else '✅'
             
-            self.frame_confirmacao.config(bg=cor_fundo)
+            self.frame_status_gesto.config(bg=cor_fundo)
             self.label_gesto_detectado.config(
-                text=f"{emoji} Gesto Detectado!\n\n{mensagem}\n\nDeseja enviar para os enfermeiros?",
+                text=f"{emoji} Gesto Detectado!\n\n{mensagem}\n\n👍 Faça gesto 'joia' para enviar",
                 bg=cor_fundo,
                 fg=cor_texto,
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE_LARGE, "bold")
             )
-            
-            # Habilita botões
-            self.btn_enviar.config(state=tk.NORMAL)
-            self.btn_cancelar.config(state=tk.NORMAL)
             
             # Reproduz alerta se crítico
             if is_critico:
@@ -323,18 +314,54 @@ class MainWindow:
         else:
             # Gesto não reconhecido
             self.gesto_pendente = None
-            self.frame_confirmacao.config(bg='#fff3e0')
+            self.frame_status_gesto.config(bg='#fff3e0')
             self.label_gesto_detectado.config(
-                text=f"⚠️ {mensagem}\n\nTente fazer o gesto novamente.",
+                text=f"⚠️ {mensagem}\n\nTente fazer um gesto válido.",
                 bg='#fff3e0',
                 fg='#e65100',
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
             )
-            self.btn_enviar.config(state=tk.DISABLED)
-            self.btn_cancelar.config(state=tk.DISABLED)
         
         # Atualiza destaque no painel de gestos
         self._destacar_gesto(chave)
+    
+    def mostrar_mensagem_temporaria(self, mensagem: str, tipo: str = "info"):
+        """
+        Mostra mensagem temporária na interface.
+        
+        Args:
+            mensagem: Mensagem a exibir.
+            tipo: Tipo da mensagem ('sucesso', 'erro', 'aviso', 'info').
+        """
+        cores = {
+            'sucesso': ('#c8e6c9', '#2e7d32'),
+            'erro': ('#ffcdd2', '#c62828'),
+            'aviso': ('#fff9c4', '#f57f17'),
+            'info': ('#e3f2fd', '#1565c0')
+        }
+        
+        cor_fundo, cor_texto = cores.get(tipo, cores['info'])
+        
+        self.frame_status_gesto.config(bg=cor_fundo)
+        self.label_gesto_detectado.config(
+            text=mensagem,
+            bg=cor_fundo,
+            fg=cor_texto,
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold")
+        )
+        
+        # Restaura após 3 segundos
+        self.root.after(3000, self._restaurar_status_padrao)
+    
+    def _restaurar_status_padrao(self):
+        """Restaura o status padrão do painel."""
+        self.frame_status_gesto.config(bg='#e8f5e9')
+        self.label_gesto_detectado.config(
+            text="👋 Faça um gesto para começar\n\n💡 Dica: Faça gesto 'joia' (👍) para enviar automaticamente",
+            bg='#e8f5e9',
+            fg='black',
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
+        )
     
     def _destacar_gesto(self, chave: tuple):
         """Destaca o gesto detectado no painel de gestos."""
@@ -352,45 +379,6 @@ class MainWindow:
                         widget.config(bg='#e3f2fd', relief=tk.RAISED, bd=3)
                         break
     
-    def _on_enviar_gesto(self):
-        """Callback para enviar gesto confirmado."""
-        if self.gesto_pendente and self.callback_enviar_gesto:
-            chave, mensagem = self.gesto_pendente
-            self.callback_enviar_gesto(chave, mensagem)
-            
-            # Feedback visual
-            self.frame_confirmacao.config(bg='#c8e6c9')
-            self.label_gesto_detectado.config(
-                text=f"✅ Mensagem enviada!\n\n{mensagem}\n\nOs enfermeiros foram notificados.",
-                bg='#c8e6c9',
-                fg='#1b5e20',
-                font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
-            )
-            
-            # Desabilita botões temporariamente
-            self.btn_enviar.config(state=tk.DISABLED)
-            self.btn_cancelar.config(state=tk.DISABLED)
-            
-            # Limpa após 3 segundos
-            self.root.after(3000, self._limpar_confirmacao)
-    
-    def _on_cancelar_gesto(self):
-        """Callback para cancelar envio de gesto."""
-        self.gesto_pendente = None
-        self._limpar_confirmacao()
-    
-    def _limpar_confirmacao(self):
-        """Limpa o painel de confirmação."""
-        self.gesto_pendente = None
-        self.frame_confirmacao.config(bg='#e8f5e9')
-        self.label_gesto_detectado.config(
-            text="Aguardando gesto...",
-            bg='#e8f5e9',
-            fg='black',
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
-        )
-        self.btn_enviar.config(state=tk.DISABLED)
-        self.btn_cancelar.config(state=tk.DISABLED)
     
     def _atualizar_painel_gestos(self):
         """Atualiza o painel visual de gestos disponíveis."""
@@ -422,8 +410,10 @@ class MainWindow:
                 card.pack(fill="x", padx=5, pady=5)
                 card.gesto_chave = chave  # Armazena chave para destacar depois
                 
-                # Ícone dos dedos
+                # Ícone dos dedos com descrição visual
                 dedos_str = '|'.join(map(str, chave))
+                dedos_desc = self._obter_descricao_dedos(chave)
+                
                 tk.Label(
                     card,
                     text=f"👋 {dedos_str}",
@@ -431,19 +421,64 @@ class MainWindow:
                     bg='white'
                 ).pack(anchor="w")
                 
+                if dedos_desc:
+                    tk.Label(
+                        card,
+                        text=f"   ({dedos_desc})",
+                        font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 2),
+                        bg='white',
+                        fg='#666'
+                    ).pack(anchor="w")
+                
                 # Mensagem
                 tk.Label(
                     card,
-                    text=mensagem,
+                    text=f"💬 {mensagem}",
                     font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
                     bg='white',
                     wraplength=280,
                     justify=tk.LEFT
                 ).pack(anchor="w", pady=2)
+                
+                # Instrução de envio
+                tk.Label(
+                    card,
+                    text="   → Faça gesto 👍 para enviar",
+                    font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 2, "italic"),
+                    bg='white',
+                    fg='#4caf50'
+                ).pack(anchor="w", pady=2)
         
         # Atualiza scroll
         self.frame_gestos_cards.update_idletasks()
         self.canvas_gestos.config(scrollregion=self.canvas_gestos.bbox("all"))
+    
+    def _obter_descricao_dedos(self, chave: tuple) -> str:
+        """
+        Retorna descrição legível dos dedos estendidos.
+        
+        Args:
+            chave: Tupla com índices dos dedos.
+            
+        Returns:
+            Descrição em texto.
+        """
+        nomes_dedos = {
+            4: "Polegar",
+            8: "Indicador",
+            12: "Médio",
+            16: "Anelar",
+            20: "Mindinho"
+        }
+        
+        descricoes = []
+        for dedo in sorted(chave):
+            if dedo in nomes_dedos:
+                descricoes.append(nomes_dedos[dedo])
+        
+        if descricoes:
+            return ", ".join(descricoes)
+        return ""
     
     def verificar_e_reproduzir_alerta(self, mensagem: str):
         """
