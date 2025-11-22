@@ -43,6 +43,45 @@
             padding: 20px 30px;
             background: #f8f9fa;
             border-bottom: 2px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .status-info {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .filtros {
+            display: flex;
+            gap: 10px;
+        }
+
+        .filtro-btn {
+            padding: 8px 15px;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 12px;
+            font-weight: bold;
+            transition: all 0.3s;
+        }
+
+        .filtro-btn.ativo {
+            background-color: #667eea;
+            color: white;
+        }
+
+        .filtro-btn.inativo {
+            background-color: #e0e0e0;
+            color: #666;
+        }
+
+        .filtro-btn:hover {
+            transform: scale(1.05);
         }
 
         .status {
@@ -99,11 +138,13 @@
             border-radius: 8px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
             animation: slideIn 0.3s ease-out;
-            transition: transform 0.2s;
+            transition: all 0.3s;
+            position: relative;
         }
 
         .alerta:hover {
             transform: translateX(5px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
         }
 
         .alerta.urgente {
@@ -114,6 +155,70 @@
         .alerta.normal {
             background-color: #e3f2fd;
             border-color: #2196f3;
+        }
+
+        .alerta.resolvido {
+            background-color: #f5f5f5;
+            border-color: #9e9e9e;
+            opacity: 0.7;
+        }
+
+        .alerta.resolvido .alerta-mensagem,
+        .alerta.resolvido .alerta-paciente {
+            text-decoration: line-through;
+            color: #999;
+        }
+
+        .alerta-acoes {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+            justify-content: flex-end;
+        }
+
+        .btn-acao {
+            padding: 8px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: bold;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .btn-resolver {
+            background-color: #4caf50;
+            color: white;
+        }
+
+        .btn-resolver:hover {
+            background-color: #45a049;
+            transform: scale(1.05);
+        }
+
+        .btn-remover {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .btn-remover:hover {
+            background-color: #da190b;
+            transform: scale(1.05);
+        }
+
+        .badge-resolvido {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background-color: #4caf50;
+            color: white;
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 11px;
+            font-weight: bold;
         }
 
         .alerta-header {
@@ -208,8 +313,18 @@
         </div>
 
         <div class="status-container">
-            <div id="status" class="status desconectado">Desconectado</div>
-            <span id="contador" style="margin-left: 15px; color: #666;">0 alertas recebidos</span>
+            <div class="status-info">
+                <div id="status" class="status desconectado">Desconectado</div>
+                <span id="contador" style="color: #666;">
+                    <span id="contador-pendentes">0</span> pendentes | 
+                    <span id="contador-resolvidos">0</span> resolvidos
+                </span>
+            </div>
+            <div class="filtros">
+                <button class="filtro-btn ativo" data-filtro="todos" onclick="filtrarAlertas('todos')">Todos</button>
+                <button class="filtro-btn inativo" data-filtro="pendentes" onclick="filtrarAlertas('pendentes')">Pendentes</button>
+                <button class="filtro-btn inativo" data-filtro="resolvidos" onclick="filtrarAlertas('resolvidos')">Resolvidos</button>
+            </div>
         </div>
 
         <div class="alertas-container">
@@ -234,18 +349,23 @@
         const statusDiv = document.getElementById('status');
         const alertasDiv = document.getElementById('alertas');
         const vazioDiv = document.getElementById('vazio');
-        const contadorDiv = document.getElementById('contador');
 
         // Estado
         let contadorAlertas = 0;
+        let contadorPendentes = 0;
+        let contadorResolvidos = 0;
+        let alertas = []; // Array para armazenar todos os alertas
+        let filtroAtivo = 'todos';
         let ws = null;
         let tentativasReconexao = 0;
         const MAX_TENTATIVAS = 5;
 
         // Função para criar elemento de alerta
-        function criarAlerta(data) {
+        function criarAlerta(data, id) {
             const alerta = document.createElement('div');
             alerta.className = `alerta ${data.prioridade === 'alta' ? 'urgente pulse' : 'normal'}`;
+            alerta.dataset.alertaId = id;
+            alerta.dataset.status = 'pendente';
             
             const icon = data.prioridade === 'alta' ? '🔴' : '⚪';
             const prioridadeTexto = data.prioridade === 'alta' ? 'URGENTE' : 'Normal';
@@ -257,6 +377,14 @@
                 </div>
                 <div class="alerta-paciente">👤 ${data.paciente}</div>
                 <div class="alerta-mensagem">${data.mensagem}</div>
+                <div class="alerta-acoes">
+                    <button class="btn-acao btn-resolver" onclick="marcarComoResolvido('${id}')">
+                        ✅ Marcar como Resolvido
+                    </button>
+                    <button class="btn-acao btn-remover" onclick="removerAlerta('${id}')">
+                        🗑️ Remover
+                    </button>
+                </div>
             `;
             
             return alerta;
@@ -269,13 +397,26 @@
                 vazioDiv.style.display = 'none';
             }
 
-            // Cria e adiciona novo alerta no topo
-            const alerta = criarAlerta(data);
-            alertasDiv.insertBefore(alerta, alertasDiv.firstChild);
+            // Gera ID único para o alerta
+            const id = `alerta-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+            
+            // Adiciona aos alertas
+            const alertaData = {
+                id: id,
+                data: data,
+                status: 'pendente',
+                timestamp: Date.now()
+            };
+            alertas.unshift(alertaData); // Adiciona no início
 
-            // Atualiza contador
+            // Cria e adiciona novo alerta no topo
+            const alertaElement = criarAlerta(data, id);
+            alertasDiv.insertBefore(alertaElement, alertasDiv.firstChild);
+
+            // Atualiza contadores
             contadorAlertas++;
-            contadorDiv.textContent = `${contadorAlertas} alerta${contadorAlertas !== 1 ? 's' : ''} recebido${contadorAlertas !== 1 ? 's' : ''}`;
+            contadorPendentes++;
+            atualizarContadores();
 
             // Reproduz som de alerta se for urgente
             if (data.prioridade === 'alta') {
@@ -299,6 +440,128 @@
 
             // Scroll para o topo para mostrar novo alerta
             alertasDiv.scrollTop = 0;
+        }
+
+        // Função para marcar alerta como resolvido
+        function marcarComoResolvido(id) {
+            const alertaElement = document.querySelector(`[data-alerta-id="${id}"]`);
+            const alertaIndex = alertas.findIndex(a => a.id === id);
+            
+            if (alertaElement && alertaIndex !== -1) {
+                // Atualiza status
+                alertas[alertaIndex].status = 'resolvido';
+                alertaElement.dataset.status = 'resolvido';
+                
+                // Atualiza visual
+                alertaElement.classList.add('resolvido');
+                alertaElement.classList.remove('urgente', 'normal', 'pulse');
+                
+                // Remove botão de resolver, mantém apenas remover
+                const acoesDiv = alertaElement.querySelector('.alerta-acoes');
+                acoesDiv.innerHTML = `
+                    <span class="badge-resolvido">✅ Resolvido</span>
+                    <button class="btn-acao btn-remover" onclick="removerAlerta('${id}')">
+                        🗑️ Remover
+                    </button>
+                `;
+                
+                // Atualiza contadores
+                contadorPendentes--;
+                contadorResolvidos++;
+                atualizarContadores();
+                
+                // Aplica filtro se necessário
+                if (filtroAtivo === 'pendentes') {
+                    alertaElement.style.display = 'none';
+                }
+                
+                // Animação de confirmação
+                alertaElement.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    alertaElement.style.transform = '';
+                }, 200);
+            }
+        }
+
+        // Função para remover alerta
+        function removerAlerta(id) {
+            const alertaElement = document.querySelector(`[data-alerta-id="${id}"]`);
+            const alertaIndex = alertas.findIndex(a => a.id === id);
+            
+            if (alertaElement && alertaIndex !== -1) {
+                // Animação de saída
+                alertaElement.style.opacity = '0';
+                alertaElement.style.transform = 'translateX(-100px)';
+                
+                setTimeout(() => {
+                    // Remove do DOM
+                    alertaElement.remove();
+                    
+                    // Remove do array
+                    const status = alertas[alertaIndex].status;
+                    alertas.splice(alertaIndex, 1);
+                    
+                    // Atualiza contadores
+                    contadorAlertas--;
+                    if (status === 'pendente') {
+                        contadorPendentes--;
+                    } else {
+                        contadorResolvidos--;
+                    }
+                    atualizarContadores();
+                    
+                    // Mostra mensagem de vazio se não houver mais alertas
+                    if (alertas.length === 0) {
+                        vazioDiv.style.display = 'block';
+                    }
+                }, 300);
+            }
+        }
+
+        // Função para atualizar contadores
+        function atualizarContadores() {
+            const contadorPendentesEl = document.getElementById('contador-pendentes');
+            const contadorResolvidosEl = document.getElementById('contador-resolvidos');
+            
+            if (contadorPendentesEl) {
+                contadorPendentesEl.textContent = contadorPendentes;
+                contadorPendentesEl.style.color = contadorPendentes > 0 ? '#f44336' : '#666';
+                contadorPendentesEl.style.fontWeight = contadorPendentes > 0 ? 'bold' : 'normal';
+            }
+            
+            if (contadorResolvidosEl) {
+                contadorResolvidosEl.textContent = contadorResolvidos;
+            }
+        }
+
+        // Função para filtrar alertas
+        function filtrarAlertas(filtro) {
+            filtroAtivo = filtro;
+            
+            // Atualiza botões de filtro
+            document.querySelectorAll('.filtro-btn').forEach(btn => {
+                if (btn.dataset.filtro === filtro) {
+                    btn.classList.add('ativo');
+                    btn.classList.remove('inativo');
+                } else {
+                    btn.classList.remove('ativo');
+                    btn.classList.add('inativo');
+                }
+            });
+            
+            // Filtra alertas
+            alertas.forEach(alertaData => {
+                const alertaElement = document.querySelector(`[data-alerta-id="${alertaData.id}"]`);
+                if (alertaElement) {
+                    if (filtro === 'todos') {
+                        alertaElement.style.display = '';
+                    } else if (filtro === 'pendentes') {
+                        alertaElement.style.display = alertaData.status === 'pendente' ? '' : 'none';
+                    } else if (filtro === 'resolvidos') {
+                        alertaElement.style.display = alertaData.status === 'resolvido' ? '' : 'none';
+                    }
+                }
+            });
         }
 
         // Função para atualizar status
