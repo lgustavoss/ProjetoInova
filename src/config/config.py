@@ -1,0 +1,54 @@
+"""
+Configurações da aplicação.
+"""
+
+import os
+from pathlib import Path
+
+
+class Config:
+    """Gerencia as configurações da aplicação."""
+    
+    # Diretórios
+    BASE_DIR = Path(__file__).parent.parent.parent
+    DATA_DIR = BASE_DIR
+    
+    # Arquivos
+    CSV_PATH = DATA_DIR / 'dados.csv'
+    EXPORT_PATH = DATA_DIR / 'gestos_exportados.txt'
+    ALERT_SOUND_PATH = DATA_DIR / 'alerta.mp3'
+    
+    # Configurações de vídeo
+    CAMERA_INDEX = 0
+    
+    # Configurações de reconhecimento de voz
+    LANGUAGE = 'pt-BR'
+    
+    # Configurações da interface
+    WINDOW_TITLE = "Reconhecimento de Gestos"
+    WINDOW_SIZE = "600x500"
+    FONT_FAMILY = "Arial"
+    FONT_SIZE_NORMAL = 12
+    FONT_SIZE_LARGE = 14
+    
+    # Palavras-chave para alertas críticos
+    CRITICAL_KEYWORDS = ['emergência', 'pânico', 'urgente']
+    
+    # Configurações WebSocket
+    WEBSOCKET_ENABLED = True
+    WEBSOCKET_HOST = "localhost"
+    WEBSOCKET_PORT = 8765
+    
+    # Informações do paciente (configurar conforme necessário)
+    PACIENTE_ID = "PAC001"
+    PACIENTE_NOME = "João Silva"
+    PACIENTE_QUARTO = "201"
+    
+    @classmethod
+    def ensure_data_file_exists(cls):
+        """Garante que o arquivo CSV existe."""
+        if not cls.CSV_PATH.exists():
+            cls.CSV_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(cls.CSV_PATH, 'w', encoding='utf-8') as f:
+                f.write('dedos,mensagem\n')
+

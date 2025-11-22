@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central de Notificações - Enfermeiros</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+            overflow: hidden;
+        }
+
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            text-align: center;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .status-container {
+            padding: 20px 30px;
+            background: #f8f9fa;
+            border-bottom: 2px solid #e9ecef;
+        }
+
+        .status {
+            display: inline-block;
+            padding: 10px 20px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 14px;
+            transition: all 0.3s;
+        }
+
+        .status.conectado {
+            background-color: #28a745;
+            color: white;
+        }
+
+        .status.desconectado {
+            background-color: #dc3545;
+            color: white;
+        }
+
+        .status.reconectando {
+            background-color: #ffc107;
+            color: #000;
+        }
+
+        .alertas-container {
+            padding: 20px 30px;
+            max-height: 600px;
+            overflow-y: auto;
+        }
+
+        .alertas-container::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        .alertas-container::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .alertas-container::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 4px;
+        }
+
+        .alertas-container::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+
+        .alerta {
+            border-left: 5px solid;
+            padding: 20px;
+            margin: 15px 0;
+            border-radius: 8px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+            animation: slideIn 0.3s ease-out;
+            transition: transform 0.2s;
+        }
+
+        .alerta:hover {
+            transform: translateX(5px);
+        }
+
+        .alerta.urgente {
+            background-color: #ffebee;
+            border-color: #f44336;
+        }
+
+        .alerta.normal {
+            background-color: #e3f2fd;
+            border-color: #2196f3;
+        }
+
+        .alerta-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .alerta-prioridade {
+            font-weight: bold;
+            font-size: 16px;
+            padding: 5px 15px;
+            border-radius: 20px;
+            display: inline-block;
+        }
+
+        .urgente .alerta-prioridade {
+            background-color: #f44336;
+            color: white;
+        }
+
+        .normal .alerta-prioridade {
+            background-color: #2196f3;
+            color: white;
+        }
+
+        .alerta-timestamp {
+            color: #666;
+            font-size: 12px;
+        }
+
+        .alerta-paciente {
+            font-weight: bold;
+            color: #333;
+            margin: 10px 0;
+            font-size: 16px;
+        }
+
+        .alerta-mensagem {
+            color: #555;
+            font-size: 15px;
+            line-height: 1.6;
+            margin-top: 10px;
+        }
+
+        .vazio {
+            text-align: center;
+            padding: 60px 20px;
+            color: #999;
+            font-size: 18px;
+        }
+
+        .vazio-icon {
+            font-size: 64px;
+            margin-bottom: 20px;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                box-shadow: 0 0 0 0 rgba(244, 67, 54, 0.7);
+            }
+            70% {
+                box-shadow: 0 0 0 10px rgba(244, 67, 54, 0);
+            }
+            100% {
+                box-shadow: 0 0 0 0 rgba(244, 67, 54, 0);
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🏥 Central de Notificações</h1>
+            <p>Sistema de Alertas em Tempo Real</p>
+        </div>
+
+        <div class="status-container">
+            <div id="status" class="status desconectado">Desconectado</div>
+            <span id="contador" style="margin-left: 15px; color: #666;">0 alertas recebidos</span>
+        </div>
+
+        <div class="alertas-container">
+            <div id="alertas"></div>
+            <div id="vazio" class="vazio">
+                <div class="vazio-icon">📭</div>
+                <div>Aguardando notificações...</div>
+                <div style="font-size: 14px; margin-top: 10px; color: #bbb;">
+                    Quando um paciente fizer um gesto, você receberá uma notificação aqui.
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Configuração
+        const WS_HOST = 'localhost';
+        const WS_PORT = 8765;
+        const WS_URL = `ws://${WS_HOST}:${WS_PORT}`;
+
+        // Elementos DOM
+        const statusDiv = document.getElementById('status');
+        const alertasDiv = document.getElementById('alertas');
+        const vazioDiv = document.getElementById('vazio');
+        const contadorDiv = document.getElementById('contador');
+
+        // Estado
+        let contadorAlertas = 0;
+        let ws = null;
+        let tentativasReconexao = 0;
+        const MAX_TENTATIVAS = 5;
+
+        // Função para criar elemento de alerta
+        function criarAlerta(data) {
+            const alerta = document.createElement('div');
+            alerta.className = `alerta ${data.prioridade === 'alta' ? 'urgente pulse' : 'normal'}`;
+            
+            const icon = data.prioridade === 'alta' ? '🔴' : '⚪';
+            const prioridadeTexto = data.prioridade === 'alta' ? 'URGENTE' : 'Normal';
+            
+            alerta.innerHTML = `
+                <div class="alerta-header">
+                    <span class="alerta-prioridade">${icon} ${prioridadeTexto}</span>
+                    <span class="alerta-timestamp">${data.timestamp}</span>
+                </div>
+                <div class="alerta-paciente">👤 ${data.paciente}</div>
+                <div class="alerta-mensagem">${data.mensagem}</div>
+            `;
+            
+            return alerta;
+        }
+
+        // Função para adicionar alerta
+        function adicionarAlerta(data) {
+            // Remove mensagem de vazio se existir
+            if (vazioDiv.style.display !== 'none') {
+                vazioDiv.style.display = 'none';
+            }
+
+            // Cria e adiciona novo alerta no topo
+            const alerta = criarAlerta(data);
+            alertasDiv.insertBefore(alerta, alertasDiv.firstChild);
+
+            // Atualiza contador
+            contadorAlertas++;
+            contadorDiv.textContent = `${contadorAlertas} alerta${contadorAlertas !== 1 ? 's' : ''} recebido${contadorAlertas !== 1 ? 's' : ''}`;
+
+            // Reproduz som de alerta se for urgente
+            if (data.prioridade === 'alta') {
+                // Cria som de alerta usando Web Audio API
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioContext.createOscillator();
+                const gainNode = audioContext.createGain();
+
+                oscillator.connect(gainNode);
+                gainNode.connect(audioContext.destination);
+
+                oscillator.frequency.value = 800;
+                oscillator.type = 'sine';
+
+                gainNode.gain.setValueAtTime(0.3, audioContext.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.5);
+
+                oscillator.start(audioContext.currentTime);
+                oscillator.stop(audioContext.currentTime + 0.5);
+            }
+
+            // Scroll para o topo para mostrar novo alerta
+            alertasDiv.scrollTop = 0;
+        }
+
+        // Função para atualizar status
+        function atualizarStatus(status, texto) {
+            statusDiv.className = `status ${status}`;
+            statusDiv.textContent = texto;
+        }
+
+        // Função para conectar WebSocket
+        function conectar() {
+            try {
+                ws = new WebSocket(WS_URL);
+
+                ws.onopen = () => {
+                    tentativasReconexao = 0;
+                    atualizarStatus('conectado', '✅ Conectado');
+                    console.log('Conectado ao servidor WebSocket');
+                };
+
+                ws.onmessage = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+                        console.log('Mensagem recebida:', data);
+                        adicionarAlerta(data);
+                    } catch (e) {
+                        console.error('Erro ao processar mensagem:', e);
+                    }
+                };
+
+                ws.onclose = () => {
+                    atualizarStatus('desconectado', '❌ Desconectado');
+                    console.log('Conexão WebSocket fechada');
+                    
+                    // Tenta reconectar após 3 segundos
+                    if (tentativasReconexao < MAX_TENTATIVAS) {
+                        tentativasReconexao++;
+                        atualizarStatus('reconectando', `🔄 Reconectando... (${tentativasReconexao}/${MAX_TENTATIVAS})`);
+                        setTimeout(conectar, 3000);
+                    } else {
+                        atualizarStatus('desconectado', '❌ Falha na conexão. Recarregue a página.');
+                    }
+                };
+
+                ws.onerror = (error) => {
+                    console.error('Erro WebSocket:', error);
+                    atualizarStatus('desconectado', '❌ Erro na conexão');
+                };
+
+            } catch (e) {
+                console.error('Erro ao criar conexão WebSocket:', e);
+                atualizarStatus('desconectado', '❌ Erro ao conectar');
+            }
+        }
+
+        // Inicia conexão quando página carrega
+        window.addEventListener('load', () => {
+            console.log('Iniciando conexão WebSocket...');
+            conectar();
+        });
+
+        // Reconecta quando página ganha foco novamente
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && (!ws || ws.readyState === WebSocket.CLOSED)) {
+                console.log('Página visível novamente, tentando reconectar...');
+                conectar();
+            }
+        });
+    </script>
+</body>
+</html>
+
