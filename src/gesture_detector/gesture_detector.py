@@ -49,44 +49,54 @@ class GestureDetector:
         """
         dedos_estendidos = []
         
-        # Verifica dedos (exceto polegar)
+        # Verifica dedos (exceto polegar) - comparação vertical
+        # Se a ponta do dedo (y menor) está acima da base, o dedo está estendido
         for dedo_topo, dedo_base in self.PONTOS_REFERENCIA.items():
             if landmarks[dedo_topo].y < landmarks[dedo_base].y:
                 dedos_estendidos.append(dedo_topo)
         
         # Verifica polegar (lógica diferente - comparação horizontal)
-        if landmarks[4].x < landmarks[3].x:
+        # Para mão direita (vista do usuário): ponta do polegar (4) está à direita da articulação (3)
+        # Para mão esquerda (vista do usuário): ponta do polegar (4) está à esquerda da articulação (3)
+        # Mas na câmera (espelhado): pode ser o oposto
+        
+        # Simplificado: verifica se o polegar está estendido usando a distância entre ponta e base
+        # Se a ponta do polegar (4) está mais afastada da base do punho (0) que a articulação (3), está estendido
+        thumb_tip = landmarks[4]
+        thumb_ip = landmarks[3]
+        wrist = landmarks[0]
+        
+        # Calcula distâncias euclidianas do punho para ponta e articulação do polegar
+        dist_tip_wrist = math.sqrt((thumb_tip.x - wrist.x)**2 + (thumb_tip.y - wrist.y)**2)
+        dist_ip_wrist = math.sqrt((thumb_ip.x - wrist.x)**2 + (thumb_ip.y - wrist.y)**2)
+        
+        # Se a ponta está mais distante que a articulação, o polegar está estendido
+        if dist_tip_wrist > dist_ip_wrist:
             dedos_estendidos.append(4)
         
         return dedos_estendidos
     
-    def detectar_gesto_joia(self, landmarks) -> bool:
+    def detectar_mao_totalmente_aberta(self, landmarks) -> bool:
         """
-        Detecta se o gesto é "joia" (polegar e indicador formando círculo).
+        Detecta se a mão está totalmente aberta (todos os 5 dedos estendidos).
+        Usado para confirmação/envio de gestos.
         
         Args:
             landmarks: Lista de landmarks da mão do MediaPipe.
             
         Returns:
-            True se for gesto joia, False caso contrário.
+            True se todos os dedos estiverem estendidos, False caso contrário.
         """
         try:
-            # Pontos do polegar e indicador
-            thumb_tip = landmarks[4]  # Polegar ponta
-            thumb_ip = landmarks[3]   # Polegar articulação
-            index_tip = landmarks[8]  # Indicador ponta
-            index_pip = landmarks[6]  # Indicador articulação
+            dedos_estendidos = self.detectar_dedos_estendidos(landmarks)
+            dedos_detectados_set = set(dedos_estendidos)
+            # Mão totalmente aberta = todos os 5 dedos (4, 8, 12, 16, 20)
+            dedos_necessarios = {4, 8, 12, 16, 20}
+            is_aberta = dedos_detectados_set == dedos_necessarios
             
-            # Calcula distância entre ponta do polegar e ponta do indicador
-            distancia = math.sqrt(
-                (thumb_tip.x - index_tip.x) ** 2 + 
-                (thumb_tip.y - index_tip.y) ** 2
-            )
-            
-            # Se a distância for pequena (polegar e indicador próximos), é joia
-            # Threshold ajustável (0.05 é uma boa distância para gesto joia)
-            return distancia < 0.05
-        except:
+            return is_aberta
+        except Exception as e:
+            # Em caso de erro, retorna False
             return False
     
     def detectar_gesto(self, landmarks) -> Tuple[Tuple[int, ...], List[int]]:

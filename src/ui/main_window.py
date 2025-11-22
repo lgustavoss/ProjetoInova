@@ -25,6 +25,7 @@ class MainWindow:
         self.gesto_pendente: Optional[Tuple[tuple, str]] = None  # (chave, mensagem) aguardando confirmação
         self.callback_salvar: Optional[Callable] = None
         self.callback_enviar_gesto: Optional[Callable] = None  # Callback para enviar gesto via WebSocket
+        self._restauracao_pendente = None  # ID do timer para cancelar restauração pendente
         
         self._configurar_janela()
         self._criar_widgets()
@@ -72,7 +73,7 @@ class MainWindow:
         
         self.label_gesto_detectado = tk.Label(
             self.frame_status_gesto,
-            text="👋 Faça um gesto para começar\n\n💡 Dica: Faça gesto 'joia' (👍) para enviar automaticamente",
+            text="👋 Faça um gesto para começar\n\n💡 Dica: Abra a mão totalmente (🖐️) para enviar ou feche (✊) para cancelar",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
             bg='#e8f5e9',
             wraplength=600,
@@ -83,7 +84,7 @@ class MainWindow:
         # Instruções
         self.label_instrucoes = tk.Label(
             left_frame,
-            text="📌 Instruções:\n1. Faça um gesto com a mão\n2. Faça gesto 'joia' (👍) para enviar",
+            text="📌 Instruções:\n1. Faça um gesto com a mão\n2. Abra a mão totalmente (🖐️) para enviar\n3. Feche a mão (✊) para cancelar",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
             bg='#f0f0f0',
             fg='#666',
@@ -108,10 +109,9 @@ class MainWindow:
         
         tk.Label(
             titulo_frame,
-            text="👍 = Enviar",
+            text="🖐️ = Enviar | ✊ = Cancelar",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
             bg='#f0f0f0',
-            fg='#4caf50',
             fg='#4caf50'
         ).pack(side="right", padx=5)
         
@@ -282,27 +282,51 @@ class MainWindow:
     
     def atualizar_gesto_atual(self, chave: tuple, mensagem: str):
         """
-        Atualiza o gesto atual detectado (apenas mostra, não envia).
+        Atualiza o gesto atual detectado e exibe mensagem.
         
         Args:
             chave: Chave do gesto detectado.
-            mensagem: Mensagem associada ao gesto.
+            mensagem: Mensagem associada ao gesto (pode conter instruções de confirmação).
         """
         self.gesto_atual = chave
         
+        # Verifica se contém mensagem de confirmação (indicando que está aguardando)
+        aguardando_confirmacao = "🖐️ Abra a mão totalmente" in mensagem or "✊ Feche a mão" in mensagem or "🖐️" in mensagem
+        
         # Se gesto foi reconhecido (tem mensagem), mostra na tela
-        if mensagem and not mensagem.startswith("Gesto não reconhecido"):
-            self.gesto_pendente = (chave, mensagem)
+        if mensagem and not mensagem.startswith("Gesto não reconhecido") and not mensagem.startswith("⚠️"):
+            # Extrai apenas a mensagem principal (remove instruções de confirmação se necessário)
+            mensagem_principal = mensagem
+            if "✅ Gesto Detectado!" in mensagem:
+                # Formatação especial para mensagem de confirmação
+                mensagem_principal = mensagem
+            elif "\n\n" in mensagem:
+                # Separa mensagem principal das instruções
+                partes = mensagem.split("\n\n")
+                if len(partes) > 0:
+                    mensagem_principal = partes[0]
+            
+            self.gesto_pendente = (chave, mensagem_principal)
             
             # Verifica se é crítico
-            is_critico = self.audio_handler.verificar_mensagem_critica(mensagem)
-            cor_fundo = '#ffebee' if is_critico else '#e8f5e9'
-            cor_texto = '#c62828' if is_critico else '#2e7d32'
-            emoji = '🔴' if is_critico else '✅'
+            is_critico = self.audio_handler.verificar_mensagem_critica(mensagem_principal)
+            
+            # Cores diferentes para aguardando confirmação
+            if aguardando_confirmacao:
+                cor_fundo = '#fff3e0'  # Laranja claro para aguardando
+                cor_texto = '#e65100'
+            elif is_critico:
+                cor_fundo = '#ffebee'  # Vermelho claro para crítico
+                cor_texto = '#c62828'
+            else:
+                cor_fundo = '#e8f5e9'  # Verde claro para normal
+                cor_texto = '#2e7d32'
+            
+            emoji = '🔴' if is_critico else '⏳' if aguardando_confirmacao else '✅'
             
             self.frame_status_gesto.config(bg=cor_fundo)
             self.label_gesto_detectado.config(
-                text=f"{emoji} Gesto Detectado!\n\n{mensagem}\n\n👍 Faça gesto 'joia' para enviar",
+                text=mensagem,  # Mostra a mensagem completa (incluindo instruções)
                 bg=cor_fundo,
                 fg=cor_texto,
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE_LARGE, "bold")
@@ -325,13 +349,14 @@ class MainWindow:
         # Atualiza destaque no painel de gestos
         self._destacar_gesto(chave)
     
-    def mostrar_mensagem_temporaria(self, mensagem: str, tipo: str = "info"):
+    def mostrar_mensagem_temporaria(self, mensagem: str, tipo: str = "info", duracao_segundos: int = 3):
         """
         Mostra mensagem temporária na interface.
         
         Args:
             mensagem: Mensagem a exibir.
             tipo: Tipo da mensagem ('sucesso', 'erro', 'aviso', 'info').
+            duracao_segundos: Duração em segundos para exibir a mensagem (padrão: 3).
         """
         cores = {
             'sucesso': ('#c8e6c9', '#2e7d32'),
@@ -342,22 +367,33 @@ class MainWindow:
         
         cor_fundo, cor_texto = cores.get(tipo, cores['info'])
         
+        # Usa fonte maior para mensagens de sucesso (envio)
+        tamanho_fonte = Config.FONT_SIZE_LARGE if tipo == 'sucesso' else Config.FONT_SIZE_NORMAL
+        
         self.frame_status_gesto.config(bg=cor_fundo)
         self.label_gesto_detectado.config(
             text=mensagem,
             bg=cor_fundo,
             fg=cor_texto,
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold")
+            font=(Config.FONT_FAMILY, tamanho_fonte, "bold")
         )
         
-        # Restaura após 3 segundos
-        self.root.after(3000, self._restaurar_status_padrao)
+        # Cancela qualquer restauração pendente (com tratamento de erro seguro)
+        if hasattr(self, '_restauracao_pendente') and self._restauracao_pendente is not None:
+            try:
+                self.root.after_cancel(self._restauracao_pendente)
+            except (ValueError, AttributeError, TypeError):
+                # Ignora erros se o timer já foi cancelado, não existe ou é inválido
+                pass
+        
+        # Restaura após o tempo especificado (em milissegundos)
+        self._restauracao_pendente = self.root.after(duracao_segundos * 1000, self._restaurar_status_padrao)
     
     def _restaurar_status_padrao(self):
         """Restaura o status padrão do painel."""
         self.frame_status_gesto.config(bg='#e8f5e9')
         self.label_gesto_detectado.config(
-            text="👋 Faça um gesto para começar\n\n💡 Dica: Faça gesto 'joia' (👍) para enviar automaticamente",
+            text="👋 Faça um gesto para começar\n\n💡 Dica: Após detectar o gesto, abra a mão totalmente (🖐️) para enviar ou feche (✊) para cancelar",
             bg='#e8f5e9',
             fg='black',
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)

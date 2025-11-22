@@ -60,27 +60,104 @@ def main():
             """Callback chamado para cada frame processado."""
             janela.atualizar_frame_video(frame_bgr)
         
-        # Callback para quando um gesto é detectado (apenas mostra na tela)
+        # Variáveis para controle de gestos e estado
+        ultimo_gesto_valido = None  # Último gesto válido armazenado para envio
+        aguardando_confirmacao = False  # Estado de espera por confirmação ou cancelamento
+        
+        # Callback para quando um gesto é detectado
         def on_gesto_detectado(chave, dedos_estendidos, indice_mao):
+            nonlocal ultimo_gesto_valido, aguardando_confirmacao
+            
+            # CRÍTICO: Ignora gestos vazios (mão fechada) - usado APENAS para cancelamento
+            # Mão fechada nunca deve ser tratada como gesto válido
+            if not chave or len(chave) == 0:
+                return
+            
+            # Valida que todos os índices são válidos (4, 8, 12, 16, 20)
+            # Ignora gestos com índices inválidos (como 0)
+            indices_validos = {4, 8, 12, 16, 20}
+            if not all(d in indices_validos for d in chave):
+                return  # Ignora gestos com índices inválidos
+            
+            # CRÍTICO: Ignora mão totalmente aberta (4, 8, 12, 16, 20) - usada APENAS para confirmação/envio
+            # Mão totalmente aberta nunca deve ser tratada como gesto válido
+            if chave == (4, 8, 12, 16, 20):
+                return
+            
+            # Se já estiver aguardando confirmação, ignora novos gestos
+            if aguardando_confirmacao:
+                return
+            
             mensagem = repositorio.obter_mensagem(chave)
             
             if mensagem:
-                mensagem_exibida = mensagem
+                # Armazena gesto válido
+                ultimo_gesto_valido = (chave, dedos_estendidos, indice_mao)
+                
+                # Ativa estado de aguardando confirmação
+                aguardando_confirmacao = True
+                processador_video.aguardando_confirmacao = True
+                
+                # Mostra gesto detectado e solicita confirmação
+                mensagem_exibida = f"✅ Gesto Detectado!\n\n{mensagem}\n\n🖐️ Abra a mão totalmente para enviar\n✊ Feche a mão para cancelar"
+                janela.atualizar_gesto_atual(chave, mensagem_exibida)
+                
+                print(f"📝 Gesto detectado: {chave} = {mensagem}")
+                print("⏳ Aguardando confirmação... (🖐️ mão aberta para enviar ou ✊ mão fechada para cancelar)")
             else:
-                mensagem_exibida = f"Gesto não reconhecido: {chave}"
-            
-            # Atualiza interface (apenas mostra, não envia ainda)
-            janela.atualizar_gesto_atual(chave, mensagem_exibida)
+                # Gesto não reconhecido - não entra em modo de espera
+                mensagem_exibida = f"⚠️ Gesto não reconhecido: {chave}\n\nTente fazer um gesto válido."
+                janela.atualizar_gesto_atual(chave, mensagem_exibida)
+                print(f"⚠️ Gesto não reconhecido: {chave}")
         
-        # Callback para gesto joia (confirmação/envio automático)
-        def on_gesto_joia_detectado(gesto_info):
-            """Envia automaticamente quando gesto joia é detectado."""
-            chave, dedos_estendidos, indice_mao = gesto_info
+        # Variáveis para controle de envio
+        ultimo_gesto_enviado = None
+        ultimo_tempo_envio = 0
+        
+        # Função auxiliar para restaurar estado padrão após enviar/cancelar
+        def restaurar_estado_padrao():
+            """Restaura o estado padrão da interface após enviar ou cancelar."""
+            nonlocal aguardando_confirmacao
+            aguardando_confirmacao = False
+            processador_video.aguardando_confirmacao = False
+            # O método _restaurar_status_padrao será chamado automaticamente após a mensagem temporária
+        
+        # Callback para mão fechada (cancelamento)
+        def on_mao_fechada_detectada():
+            """Cancela o envio e volta a detectar novos gestos."""
+            nonlocal aguardando_confirmacao, ultimo_gesto_valido
+            
+            if aguardando_confirmacao:
+                # Cancela e volta ao estado inicial
+                aguardando_confirmacao = False
+                processador_video.aguardando_confirmacao = False
+                ultimo_gesto_valido = None
+                
+                # Mostra feedback de cancelamento
+                janela.mostrar_mensagem_temporaria("❌ Envio cancelado\n\nVocê pode fazer um novo gesto.", "aviso", duracao_segundos=3)
+                print("❌ Envio cancelado. Aguardando novo gesto...")
+                
+                # Restaura estado padrão após exibir mensagem
+                janela.root.after(3500, restaurar_estado_padrao)
+        
+        # Callback para mão totalmente aberta (confirmação/envio)
+        def on_mao_aberta_detectada(gesto_info):
+            """Envia o gesto quando mão totalmente aberta é detectada durante aguardando confirmação."""
+            nonlocal ultimo_gesto_enviado, ultimo_tempo_envio, ultimo_gesto_valido, aguardando_confirmacao
+            
+            # Só processa se estiver aguardando confirmação
+            if not aguardando_confirmacao:
+                return
+            
+            if not ultimo_gesto_valido:
+                print("⚠️ Mão totalmente aberta detectada, mas nenhum gesto válido foi armazenado.")
+                return
+            
+            chave, dedos_estendidos, indice_mao = ultimo_gesto_valido
             mensagem = repositorio.obter_mensagem(chave)
             
             if not mensagem:
-                # Gesto não reconhecido
-                janela.mostrar_mensagem_temporaria("⚠️ Gesto não reconhecido. Faça um gesto válido primeiro.", "aviso")
+                print(f"⚠️ Erro: gesto {chave} não tem mensagem associada.")
                 return
             
             # Debounce: evita envios múltiplos do mesmo gesto
@@ -104,18 +181,31 @@ def main():
                 ultimo_gesto_enviado = chave
                 ultimo_tempo_envio = tempo_atual
                 
-                # Feedback visual
-                janela.mostrar_mensagem_temporaria(f"✅ Enviado: {mensagem}", "sucesso")
-                print(f"📤 Gesto enviado automaticamente: {mensagem} (Prioridade: {prioridade})")
+                # Desativa estado de aguardando confirmação
+                aguardando_confirmacao = False
+                processador_video.aguardando_confirmacao = False
+                ultimo_gesto_valido = None
+                
+                # Feedback visual de sucesso
+                emoji_prioridade = "🔴" if prioridade == "alta" else "✅"
+                mensagem_feedback = f"{emoji_prioridade} MENSAGEM ENVIADA COM SUCESSO!\n\n{mensagem}\n\n👍 O enfermeiro foi notificado"
+                janela.mostrar_mensagem_temporaria(mensagem_feedback, "sucesso", duracao_segundos=5)
+                
+                # Restaura estado padrão após exibir mensagem
+                janela.root.after(5500, restaurar_estado_padrao)
+                
+                print(f"📤 Gesto enviado: {mensagem} (Prioridade: {prioridade})")
+                print("✅ Estado resetado. Aguardando novo gesto...")
             else:
-                janela.mostrar_mensagem_temporaria("⚠️ WebSocket não conectado. Verifique a conexão.", "erro")
+                janela.mostrar_mensagem_temporaria("⚠️ WebSocket não conectado. Verifique a conexão.", "erro", duracao_segundos=3)
                 print("⚠️ WebSocket não está rodando. Não foi possível enviar.")
         
         # Inicializa processador de vídeo
         processador_video = VideoProcessor(
             callback_gesto=on_gesto_detectado,
             callback_frame=on_frame_processado,
-            callback_joia=on_gesto_joia_detectado
+            callback_mao_aberta=on_mao_aberta_detectada,
+            callback_mao_fechada=on_mao_fechada_detectada
         )
         processador_video.iniciar()
         

@@ -41,8 +41,41 @@ class GestoRepository:
                         continue
                     
                     try:
-                        dedos = tuple(sorted(int(d) for d in dedos_str.split('|') if d))
-                        self._gestos[dedos] = mensagem
+                        # Remove aspas extras e espaços
+                        dedos_str = dedos_str.strip('"').strip()
+                        if not dedos_str:
+                            # Ignora gestos vazios (mão fechada deve ser usada apenas para cancelamento)
+                            continue
+                        
+                        # Converte para tupla de inteiros, filtrando valores inválidos
+                        dedos_lista = []
+                        for d in dedos_str.split('|'):
+                            d = d.strip()
+                            if d:
+                                try:
+                                    dedo = int(d)
+                                    # Índices válidos dos dedos no MediaPipe: 4, 8, 12, 16, 20
+                                    if dedo in [4, 8, 12, 16, 20]:
+                                        dedos_lista.append(dedo)
+                                    # Ignora índices inválidos (como 0)
+                                except ValueError:
+                                    continue
+                        
+                        # Só adiciona se tiver pelo menos um dedo válido
+                        if len(dedos_lista) > 0:
+                            dedos = tuple(sorted(set(dedos_lista)))  # Remove duplicatas e ordena
+                            
+                            # CRÍTICO: Ignora mão totalmente aberta (4, 8, 12, 16, 20) do CSV
+                            # Mão totalmente aberta deve ser usada APENAS para confirmação/envio, não como gesto válido
+                            if dedos == (4, 8, 12, 16, 20):
+                                continue  # Pula este gesto, não adiciona ao repositório
+                            
+                            # Se já existir, mantém a primeira ocorrência (ou pode sobrescrever com a última)
+                            if dedos not in self._gestos:
+                                self._gestos[dedos] = mensagem
+                            # Se já existir e mensagem for diferente, usa a mais recente
+                            else:
+                                self._gestos[dedos] = mensagem
                     except ValueError:
                         continue
         except Exception as e:
@@ -58,6 +91,21 @@ class GestoRepository:
         Returns:
             Mensagem associada ou None se não encontrada.
         """
+        # CRÍTICO: Nunca retorna mensagem para gesto vazio (mão fechada)
+        # Mão fechada deve ser usada APENAS para cancelamento
+        if not chave or len(chave) == 0:
+            return None
+        
+        # CRÍTICO: Nunca retorna mensagem para mão totalmente aberta (todos os 5 dedos)
+        # Mão totalmente aberta (4, 8, 12, 16, 20) deve ser usada APENAS para confirmação/envio
+        if chave == (4, 8, 12, 16, 20):
+            return None
+        
+        # Valida que todos os índices são válidos (4, 8, 12, 16, 20)
+        indices_validos = {4, 8, 12, 16, 20}
+        if not all(d in indices_validos for d in chave):
+            return None
+        
         return self._gestos.get(chave)
     
     def salvar_gesto(self, chave: Tuple[int, ...], mensagem: str) -> bool:
