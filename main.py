@@ -47,7 +47,12 @@ def main():
                 print("   Aplicação continuará sem WebSocket.")
                 websocket_server = None
         
-        # Callback para quando um gesto é detectado
+        # Callback para frames de vídeo (atualiza interface)
+        def on_frame_processado(frame_bgr):
+            """Callback chamado para cada frame processado."""
+            janela.atualizar_frame_video(frame_bgr)
+        
+        # Callback para quando um gesto é detectado (apenas mostra, não envia)
         def on_gesto_detectado(chave, dedos_estendidos, indice_mao):
             mensagem = repositorio.obter_mensagem(chave)
             
@@ -56,26 +61,31 @@ def main():
             else:
                 mensagem_exibida = f"Gesto não reconhecido: {chave}"
             
-            # Atualiza interface
+            # Atualiza interface e pede confirmação (não envia automaticamente)
             janela.atualizar_gesto_atual(chave, mensagem_exibida)
-            
-            # Verifica e reproduz alerta se necessário
-            if mensagem:
-                janela.verificar_e_reproduzir_alerta(mensagem)
-                
-                # Envia notificação via WebSocket se habilitado
-                if websocket_server and mensagem:
-                    prioridade = "alta" if audio_handler.verificar_mensagem_critica(mensagem) else "normal"
-                    websocket_server.broadcast({
-                        "tipo": "gesto",
-                        "paciente": f"{Config.PACIENTE_NOME} - Quarto {Config.PACIENTE_QUARTO}",
-                        "mensagem": mensagem,
-                        "prioridade": prioridade,
-                        "timestamp": datetime.now().strftime("%H:%M:%S")
-                    })
+        
+        # Callback para enviar gesto confirmado pelo paciente
+        def on_enviar_gesto_confirmado(chave, mensagem):
+            """Envia gesto confirmado pelo paciente via WebSocket."""
+            if websocket_server:
+                prioridade = "alta" if audio_handler.verificar_mensagem_critica(mensagem) else "normal"
+                websocket_server.broadcast({
+                    "tipo": "gesto",
+                    "paciente": f"{Config.PACIENTE_NOME} - Quarto {Config.PACIENTE_QUARTO}",
+                    "mensagem": mensagem,
+                    "prioridade": prioridade,
+                    "timestamp": datetime.now().strftime("%H:%M:%S")
+                })
+                print(f"📤 Gesto enviado: {mensagem} (Prioridade: {prioridade})")
+        
+        # Configura callback de envio na janela
+        janela.callback_enviar_gesto = on_enviar_gesto_confirmado
         
         # Inicializa processador de vídeo
-        processador_video = VideoProcessor(callback_gesto=on_gesto_detectado)
+        processador_video = VideoProcessor(
+            callback_gesto=on_gesto_detectado,
+            callback_frame=on_frame_processado
+        )
         processador_video.iniciar()
         
         # Executa interface gráfica

@@ -25,11 +25,20 @@ class Config:
     LANGUAGE = 'pt-BR'
     
     # Configurações da interface
-    WINDOW_TITLE = "Reconhecimento de Gestos"
-    WINDOW_SIZE = "600x500"
+    WINDOW_TITLE = "Painel do Paciente - Reconhecimento de Gestos"
+    WINDOW_SIZE = "1000x700"
     FONT_FAMILY = "Arial"
     FONT_SIZE_NORMAL = 12
     FONT_SIZE_LARGE = 14
+    FONT_SIZE_XLARGE = 16
+    
+    # Configurações de vídeo na interface
+    VIDEO_WIDTH = 640
+    VIDEO_HEIGHT = 480
+    VIDEO_FPS = 30
+    
+    # Mostrar janela OpenCV separada (False = apenas na interface Tkinter)
+    SHOW_OPENCV_WINDOW = False
     
     # Palavras-chave para alertas críticos
     CRITICAL_KEYWORDS = ['emergência', 'pânico', 'urgente']

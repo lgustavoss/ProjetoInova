@@ -13,23 +13,27 @@ from src.config.config import Config
 class VideoProcessor:
     """Processa vídeo da câmera e detecta gestos."""
     
-    def __init__(self, camera_index: int = None, callback_gesto: Optional[Callable] = None):
+    def __init__(self, camera_index: int = None, callback_gesto: Optional[Callable] = None, callback_frame: Optional[Callable] = None):
         """
         Inicializa o processador de vídeo.
         
         Args:
             camera_index: Índice da câmera (padrão: 0).
             callback_gesto: Função chamada quando um gesto é detectado.
-                            Recebe (chave, mensagem, indice_mao) como argumentos.
+                            Recebe (chave, dedos_estendidos, indice_mao) como argumentos.
+            callback_frame: Função chamada para cada frame processado.
+                            Recebe (frame_bgr) como argumento.
         """
         self.camera_index = camera_index or Config.CAMERA_INDEX
         self.callback_gesto = callback_gesto
+        self.callback_frame = callback_frame
         self.cap: Optional[cv2.VideoCapture] = None
         self.detector = GestureDetector()
         self.mp_draw = mp.solutions.drawing_utils
         self.mp_hands = mp.solutions.hands
         self.running = False
         self.thread: Optional[threading.Thread] = None
+        self.show_opencv_window = Config.SHOW_OPENCV_WINDOW
     
     def iniciar(self):
         """Inicia a captura de vídeo."""
@@ -85,12 +89,25 @@ class VideoProcessor:
                         2
                     )
             
-            cv2.imshow("Detecção de Gestos", img)
+            # Chama callback de frame se fornecido (para exibir na UI)
+            if self.callback_frame:
+                try:
+                    self.callback_frame(img.copy())
+                except Exception as e:
+                    print(f"Erro ao chamar callback de frame: {e}")
             
-            # Verifica se ESC foi pressionado
-            if cv2.waitKey(1) & 0xFF == 27:
-                self.parar()
-                break
+            # Mostra janela OpenCV apenas se configurado
+            if self.show_opencv_window:
+                cv2.imshow("Detecção de Gestos", img)
+                
+                # Verifica se ESC foi pressionado
+                if cv2.waitKey(1) & 0xFF == 27:
+                    self.parar()
+                    break
+            else:
+                # Pequeno delay para não sobrecarregar CPU
+                import time
+                time.sleep(1.0 / Config.VIDEO_FPS)
     
     def parar(self):
         """Para a captura de vídeo e libera recursos."""
@@ -99,7 +116,8 @@ class VideoProcessor:
         if self.cap:
             self.cap.release()
         
-        cv2.destroyAllWindows()
+        if self.show_opencv_window:
+            cv2.destroyAllWindows()
         self.detector.liberar()
     
     def aguardar_finalizacao(self):
