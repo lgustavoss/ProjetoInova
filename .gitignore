@@ -45,7 +45,15 @@ Thumbs.db
 # dados.csv
 # gestos_exportados.txt
 
+# Banco de dados SQLite
+*.db
+*.sqlite
+*.sqlite3
+banco_dados.db
+
 # Arquivos de áudio (opcional)
 # *.mp3
 # *.wav
 
+# Python __pycache__
+__pycache__/

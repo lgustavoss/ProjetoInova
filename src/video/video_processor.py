@@ -55,7 +55,13 @@ class VideoProcessor:
         
         # Debounce para detecção de mão totalmente aberta (confirmação)
         self.ultimo_tempo_mao_aberta = 0  # Timestamp da última detecção de mão aberta
-        self.DEBOUNCE_MAO_ABERTA_SEGUNDOS = 0.5  # Aguarda 0.5s antes de detectar mão aberta novamente
+        self.DEBOUNCE_MAO_ABERTA_SEGUNDOS = 1.5  # Aguarda 1.5s antes de detectar mão aberta novamente (aumentado para evitar múltiplos envios)
+        self.ultima_deteccao_mao_aberta_completa = 0  # Timestamp da última vez que detectou mão totalmente aberta (5 dedos)
+        self.WINDOW_IGNORAR_4_DEDOS_SEGUNDOS = 5.0  # Janela de tempo para ignorar gestos de 4 dedos após detectar mão totalmente aberta (aumentado para evitar falsos positivos)
+        self.contador_deteccoes_mao_aberta = 0  # Contador de detecções consecutivas de mão totalmente aberta
+        self.ultima_deteccao_mao_aberta = False  # Flag para indicar se mão totalmente aberta foi detectada recentemente
+        self.tempo_deteccao_mao_aberta = 0  # Timestamp da última vez que mão totalmente aberta foi detectada
+        self.WINDOW_MAO_ABERTA_SEGUNDOS = 2.0  # Janela de tempo para ignorar gestos de 4 dedos após detectar mão totalmente aberta
     
     def iniciar(self):
         """Inicia a captura de vídeo."""
@@ -90,66 +96,66 @@ class VideoProcessor:
                         self.mp_hands.HAND_CONNECTIONS
                     )
                     
-                    # CRÍTICO: Verifica mão totalmente aberta ANTES de processar como gesto normal
-                    # Mão totalmente aberta (todos os 5 dedos) = confirmação/envio
-                    # NÃO deve ser tratada como gesto válido, apenas para confirmação
-                    is_mao_aberta = self.detector.detectar_mao_totalmente_aberta(hand_landmarks.landmark)
+                    # CRÍTICO: Detecta gesto PRIMEIRO para contar dedos antes de verificar estados especiais
+                    chave_temp, dedos_estendidos_temp = self.detector.detectar_gesto(
+                        hand_landmarks.landmark
+                    )
+                    num_dedos_detectados = len(chave_temp) if chave_temp else 0
                     
-                    if is_mao_aberta:
-                        # Mão totalmente aberta detectada - usado APENAS para confirmação/envio
-                        # NÃO processa como gesto normal e NÃO armazena como gesto detectado
-                        
-                        # Debounce: evita múltiplas detecções de mão aberta
+                    # CRÍTICO: Verifica mão fechada ANTES de qualquer outra coisa
+                    # Mão fechada tem PRIORIDADE MÁXIMA quando está aguardando confirmação
+                    # Mão fechada (nenhum ou muito poucos dedos) = cancelamento
+                    # NÃO deve ser tratada como gesto válido, apenas para cancelamento
+                    is_mao_fechada = self.detector.detectar_mao_fechada(hand_landmarks.landmark)
+                    
+                    # CRÍTICO: Se estiver aguardando confirmação e detectar mão fechada,
+                    # cancela IMEDIATAMENTE sem verificar nada mais
+                    if is_mao_fechada and self.aguardando_confirmacao:
                         tempo_atual = time.time()
-                        tempo_suficiente_mao_aberta = tempo_atual - self.ultimo_tempo_mao_aberta >= self.DEBOUNCE_MAO_ABERTA_SEGUNDOS
+                        tempo_suficiente_mao_fechada = tempo_atual - self.ultimo_tempo_mao_fechada >= self.DEBOUNCE_MAO_FECHADA_SEGUNDOS
                         
-                        # Chama callback de confirmação apenas se estiver aguardando confirmação e passou tempo suficiente
-                        if self.callback_mao_aberta and self.aguardando_confirmacao:
-                            if tempo_suficiente_mao_aberta:
-                                # Passa None como gesto_info - o callback do main.py usará ultimo_gesto_valido
-                                print(f"✅ Mão totalmente aberta detectada! Confirmando envio...")
-                                self.callback_mao_aberta(None)  # Passa None, o callback usa ultimo_gesto_valido do main.py
-                                self.ultimo_tempo_mao_aberta = tempo_atual
-                            else:
-                                # Está aguardando mas ainda não passou tempo suficiente (debounce)
-                                # Não loga para evitar spam no console
-                                pass
-                        elif not self.aguardando_confirmacao:
-                            # Apenas loga se não estiver aguardando (para não poluir o console)
-                            pass
+                        if self.callback_mao_fechada and tempo_suficiente_mao_fechada:
+                            print("✊ Mão fechada detectada! Cancelando envio...")
+                            self.callback_mao_fechada()
+                            self.ultimo_tempo_mao_fechada = tempo_atual
                         
                         # Exibe informação na imagem
-                        texto = f"Mão {idx+1}: 🖐️ MÃO ABERTA"
-                        if self.aguardando_confirmacao:
-                            texto += " (Confirmando...)"
-                        else:
-                            texto += " (Faça um gesto primeiro)"
+                        texto = f"Mão {idx+1}: ✊ MÃO FECHADA (Cancelando...)"
                         cv2.putText(
                             img,
                             texto,
                             (10, 70 + idx * 30),
                             cv2.FONT_HERSHEY_SIMPLEX,
                             1,
-                            (0, 255, 0),  # Verde para mão aberta
+                            (0, 0, 255),  # Vermelho para mão fechada
                             2
                         )
-                        # PULA processamento como gesto normal quando é mão totalmente aberta
+                        # PULA processamento como gesto normal quando é mão fechada
                         continue
                     
-                    # Detecta gesto normal (apenas se NÃO for mão totalmente aberta)
-                    chave, dedos_estendidos = self.detector.detectar_gesto(
-                        hand_landmarks.landmark
-                    )
+                    # CRÍTICO: Só verifica mão totalmente aberta se forem EXATAMENTE 5 dedos
+                    # E apenas se estiverem os 5 dedos corretos: (4, 8, 12, 16, 20)
+                    # IMPORTANTE: Só verifica se NÃO for mão fechada
+                    is_mao_aberta = False
+                    if not is_mao_fechada and num_dedos_detectados == 5:
+                        # Verifica se são os 5 dedos corretos
+                        dedos_esperados = {4, 8, 12, 16, 20}
+                        dedos_detectados_set = set(chave_temp) if chave_temp else set()
+                        
+                        if dedos_detectados_set == dedos_esperados:
+                            # Só então verifica se é realmente mão totalmente aberta
+                            # (com validação rigorosa do polegar)
+                            is_mao_aberta = self.detector.detectar_mao_totalmente_aberta(hand_landmarks.landmark)
+                        else:
+                            # Tem 5 dedos, mas não são os corretos - não é mão totalmente aberta
+                            print(f"🔍 [DEBUG] 5 dedos detectados, mas não são os corretos: {chave_temp} != {dedos_esperados}")
+                            is_mao_aberta = False
+                    else:
+                        # Menos de 5 dedos ou mão fechada - definitivamente não é mão totalmente aberta
+                        is_mao_aberta = False
                     
-                    # CRÍTICO: Ignora mão totalmente aberta (4, 8, 12, 16, 20) mesmo que detectada como gesto normal
-                    # Isso garante que mão totalmente aberta nunca seja tratada como um gesto reconhecido
-                    # Mão totalmente aberta = confirmação/envio, não é um gesto válido
-                    if chave == (4, 8, 12, 16, 20):
-                        continue
-                    
-                    # CRÍTICO: Verifica se é mão fechada (nenhum dedo estendido = cancelamento)
-                    # Mão fechada NUNCA deve ser tratada como gesto válido, apenas para cancelamento
-                    if not chave or len(chave) == 0:
+                    # Processa mão fechada quando NÃO está aguardando confirmação (só para exibição)
+                    if is_mao_fechada:
                         # Mão fechada detectada - usado APENAS para cancelar envio
                         # Só cancela se estiver aguardando confirmação e passou tempo suficiente
                         tempo_atual = time.time()
@@ -159,14 +165,169 @@ class VideoProcessor:
                             print("✊ Mão fechada detectada! Cancelando envio...")
                             self.callback_mao_fechada()
                             self.ultimo_tempo_mao_fechada = tempo_atual
-                        # IMPORTANTE: Mão fechada NUNCA é armazenada como gesto detectado
-                        # Continue sempre para ignorar completamente o processamento como gesto normal
+                        
+                        # Exibe informação na imagem
+                        texto = f"Mão {idx+1}: ✊ MÃO FECHADA"
+                        if self.aguardando_confirmacao:
+                            texto += " (Cancelando...)"
+                        cv2.putText(
+                            img,
+                            texto,
+                            (10, 70 + idx * 30),
+                            cv2.FONT_HERSHEY_SIMPLEX,
+                            1,
+                            (0, 0, 255),  # Vermelho para mão fechada
+                            2
+                        )
+                        # PULA processamento como gesto normal quando é mão fechada
                         continue
                     
-                    # NOVO FLUXO: Se estiver aguardando confirmação, ignora novos gestos
-                    # Só processa novos gestos após confirmação (joia) ou cancelamento (mão fechada)
+                    # Usa os valores já detectados acima
+                    chave = chave_temp
+                    dedos_estendidos = dedos_estendidos_temp
+                    
+                    # DEBUG: Log para entender o que está sendo detectado
+                    if chave:
+                        num_dedos_detectados = len(chave)
+                        print(f"🔍 [DEBUG] Gestos detectados: {chave} ({num_dedos_detectados} dedos) | is_mao_aberta={is_mao_aberta}")
+                    
+                    # CRÍTICO: Só considera mão totalmente aberta se EXATAMENTE 5 dedos forem detectados
+                    # IMPORTANTE: Verifica PRIMEIRO se são 5 dedos, DEPOIS verifica se é mão totalmente aberta
+                    # Se tiver 4 dedos ou menos, processa como gesto normal (não é mão totalmente aberta)
+                    num_dedos = len(chave) if chave else 0
+                    
+                    # Força is_mao_aberta = False se não forem 5 dedos (evita falsos positivos)
+                    if num_dedos != 5:
+                        is_mao_aberta = False
+                    
+                    # CRÍTICO: Se detectou 5 dedos (independentemente de validação), atualiza timestamp
+                    # Isso garante que gestos de 4 dedos detectados depois sejam ignorados
+                    # IMPORTANTE: Atualiza SEMPRE que detectar 5 dedos, mesmo que não esteja aguardando confirmação
+                    if num_dedos == 5:
+                        dedos_detectados_set_5 = set(chave) if chave else set()
+                        dedos_corretos_5 = {4, 8, 12, 16, 20}
+                        if dedos_detectados_set_5 == dedos_corretos_5:
+                            # Detectou os 5 dedos corretos - atualiza timestamp para ignorar gestos de 4 dedos
+                            self.ultima_deteccao_mao_aberta_completa = time.time()
+                            self.contador_deteccoes_mao_aberta += 1  # Incrementa contador
+                            print(f"🔍 [DEBUG] Timestamp atualizado: mão totalmente aberta detectada (5 dedos) - contador: {self.contador_deteccoes_mao_aberta}")
+                    else:
+                        # Se não detectou 5 dedos, reseta contador após alguns frames sem detecção
+                        # (não reseta imediatamente para evitar resetar entre detecções intermitentes)
+                        if self.contador_deteccoes_mao_aberta > 0 and num_dedos < 4:
+                            self.contador_deteccoes_mao_aberta = 0
+                    
+                    if num_dedos == 5 and is_mao_aberta:
+                        # Mão totalmente aberta detectada (EXATAMENTE 5 dedos confirmados) - usado APENAS para confirmação/envio
+                        # NÃO processa como gesto normal e NÃO armazena como gesto detectado
+                        
+                        # VALIDAÇÃO FINAL: Verifica se os dedos detectados são exatamente os corretos
+                        dedos_corretos = {4, 8, 12, 16, 20}
+                        dedos_detectados_set = set(chave) if chave else set()
+                        
+                        if dedos_detectados_set != dedos_corretos:
+                            # Tem 5 dedos, mas não são os corretos - ignora
+                            print(f"🔍 [DEBUG] MÃO TOTALMENTE ABERTA REJEITADA: {chave} não corresponde a {dedos_corretos}")
+                            is_mao_aberta = False
+                            # Continua processando como gesto normal
+                        else:
+                            print(f"🔍 [DEBUG] MÃO TOTALMENTE ABERTA CONFIRMADA: {chave} ({num_dedos} dedos)")
+                            
+                            # Debounce: evita múltiplas detecções de mão aberta
+                            tempo_atual = time.time()
+                            
+                            # CRÍTICO: Se ultimo_tempo_mao_aberta for 0, significa que acabou de resetar
+                            # Neste caso, inicializa com tempo atual menos o debounce para permitir primeira detecção
+                            if self.ultimo_tempo_mao_aberta == 0:
+                                self.ultimo_tempo_mao_aberta = tempo_atual - self.DEBOUNCE_MAO_ABERTA_SEGUNDOS
+                            
+                            tempo_suficiente_mao_aberta = tempo_atual - self.ultimo_tempo_mao_aberta >= self.DEBOUNCE_MAO_ABERTA_SEGUNDOS
+                            
+                            # CRÍTICO: Atualiza timestamp de detecção de mão totalmente aberta SEMPRE que detectar
+                            # Isso será usado para ignorar gestos de 4 dedos logo após detectar mão totalmente aberta
+                            # IMPORTANTE: Atualiza tanto quando está aguardando confirmação quanto quando não está
+                            self.ultima_deteccao_mao_aberta_completa = tempo_atual
+                            
+                            # Chama callback de confirmação apenas se estiver aguardando confirmação e passou tempo suficiente
+                            if self.callback_mao_aberta and self.aguardando_confirmacao:
+                                if tempo_suficiente_mao_aberta:
+                                    # Passa None como gesto_info - o callback do main.py usará ultimo_gesto_valido
+                                    print(f"✅ Mão totalmente aberta detectada (5 dedos)! Confirmando envio...")
+                                    self.callback_mao_aberta(None)  # Passa None, o callback usa ultimo_gesto_valido do main.py
+                                    self.ultimo_tempo_mao_aberta = tempo_atual
+                                # else: ainda está em período de debounce - não faz nada
+                            elif not self.aguardando_confirmacao:
+                                # Mão totalmente aberta detectada mas não está aguardando confirmação
+                                # Isso significa que a pessoa está apenas mostrando a mão aberta sem querer fazer gesto
+                                # Atualiza timestamp para ignorar gestos de 4 dedos que possam ser detectados depois
+                                # Não faz nada além de atualizar o timestamp (já feito acima)
+                                pass
+                            
+                            # Exibe informação na imagem
+                            texto = f"Mão {idx+1}: 🖐️ MÃO ABERTA (5 dedos)"
+                            if self.aguardando_confirmacao:
+                                texto += " (Confirmando...)"
+                            else:
+                                texto += " (Faça um gesto primeiro)"
+                            cv2.putText(
+                                img,
+                                texto,
+                                (10, 70 + idx * 30),
+                                cv2.FONT_HERSHEY_SIMPLEX,
+                                1,
+                                (0, 255, 0),  # Verde para mão aberta
+                                2
+                            )
+                            # PULA processamento como gesto normal quando é mão totalmente aberta
+                            continue
+                    
+                    # Se chegou aqui, não é mão totalmente aberta - continua processando como gesto normal
+                    
+                    # CRÍTICO: Se estiver aguardando confirmação, ignora TODOS os gestos normais
+                    # Durante confirmação, apenas mão fechada (cancelar) ou mão totalmente aberta (enviar) são aceitos
+                    # Qualquer outro gesto deve ser completamente ignorado ANTES de processar
                     if self.aguardando_confirmacao:
-                        continue  # Ignora novos gestos enquanto aguarda confirmação
+                        # Ignora completamente qualquer gesto normal enquanto aguarda confirmação
+                        continue
+                    
+                    # CRÍTICO: Ignora mão totalmente aberta (4, 8, 12, 16, 20) mesmo que detectada como gesto normal
+                    # Isso garante que mão totalmente aberta nunca seja tratada como um gesto reconhecido
+                    # Mão totalmente aberta = confirmação/envio, não é um gesto válido
+                    if chave == (4, 8, 12, 16, 20):
+                        continue
+                    
+                    # CRÍTICO: Ignora gestos de 4 dedos quando mão totalmente aberta foi detectada neste mesmo frame ou recentemente
+                    # Quando a mão está totalmente aberta, às vezes detecta 4 dedos primeiro (sem o polegar)
+                    # e trata como gesto válido. Isso causa falsos positivos.
+                    if chave == (8, 12, 16, 20):
+                        # Se detectou mão totalmente aberta neste mesmo frame, ignora o gesto de 4 dedos
+                        if is_mao_aberta:
+                            print(f"🔍 [DEBUG] Ignorando gesto de 4 dedos - mão totalmente aberta detectada no mesmo frame (falso positivo)")
+                            continue
+                        
+                        # Se houve múltiplas detecções de mão totalmente aberta recentemente, ignora gestos de 4 dedos completamente
+                        # Isso evita falsos positivos quando a pessoa está apenas mostrando a mão aberta
+                        if self.contador_deteccoes_mao_aberta >= 5:  # Se detectou mão totalmente aberta várias vezes
+                            print(f"🔍 [DEBUG] Ignorando gesto de 4 dedos - mão totalmente aberta detectada {self.contador_deteccoes_mao_aberta} vezes recentemente (provável mão apenas aberta)")
+                            continue
+                        
+                        # Se detectou mão totalmente aberta recentemente, ignora gestos de 4 dedos por um período
+                        tempo_atual_check = time.time()
+                        tempo_desde_mao_aberta = tempo_atual_check - self.ultima_deteccao_mao_aberta_completa
+                        
+                        if tempo_desde_mao_aberta < self.WINDOW_IGNORAR_4_DEDOS_SEGUNDOS and self.ultima_deteccao_mao_aberta_completa > 0:
+                            # Gesto de 4 dedos detectado logo após mão totalmente aberta - ignora (provável falso positivo)
+                            print(f"🔍 [DEBUG] Ignorando gesto de 4 dedos - detectado {tempo_desde_mao_aberta:.2f}s após mão totalmente aberta (falso positivo provável)")
+                            continue
+                    
+                    # CRÍTICO: Verifica novamente se é mão fechada (fallback caso a detecção anterior não tenha pego)
+                    # IMPORTANTE: Mão fechada = 0 dedos, não 1 dedo!
+                    # 1 dedo (indicador) é um COMANDO VÁLIDO, não mão fechada
+                    # Esta verificação só acontece quando NÃO está aguardando confirmação (já verificamos acima)
+                    if not chave or len(chave) == 0:
+                        # Mão fechada detectada (0 dedos) - apenas para exibição quando não está aguardando confirmação
+                        # Não faz nada aqui, apenas exibe na imagem
+                        continue
                     
                     # Armazena último gesto detectado (apenas gestos válidos, não joia)
                     # O callback de gesto será responsável por validar se tem mensagem antes de armazenar

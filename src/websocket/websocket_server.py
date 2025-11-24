@@ -41,13 +41,12 @@ class WebSocketServer:
             self.clients.discard(websocket)
         print(f"❌ Cliente desconectado. Total de enfermeiros conectados: {len(self.clients)}")
     
-    async def _servidor_handler(self, websocket: WebSocketServerProtocol, path: str):
+    async def _handler_connection(self, websocket: WebSocketServerProtocol):
         """
         Handler para conexões WebSocket.
         
         Args:
             websocket: Conexão WebSocket do cliente.
-            path: Caminho da requisição.
         """
         await self._registrar_cliente(websocket)
         try:
@@ -104,15 +103,20 @@ class WebSocketServer:
             return
         
         if not self.clients:
-            print("⚠️ Nenhum cliente conectado ao WebSocket.")
+            print(f"⚠️ Nenhum cliente conectado ao WebSocket. Mensagem não enviada: {mensagem.get('mensagem', 'N/A')}")
             return
         
         try:
-            asyncio.run_coroutine_threadsafe(
+            # Envia mensagem assincronamente
+            future = asyncio.run_coroutine_threadsafe(
                 self._broadcast_async(mensagem),
                 self.loop
             )
-            print(f"📤 Mensagem enviada para {len(self.clients)} cliente(s)")
+            # Aguarda um pouco para garantir que foi enviada
+            future.result(timeout=1.0)
+            print(f"📤 Mensagem enviada para {len(self.clients)} cliente(s): {mensagem.get('mensagem', 'N/A')}")
+        except asyncio.TimeoutError:
+            print(f"⏱️ Timeout ao enviar mensagem via WebSocket")
         except Exception as e:
             print(f"❌ Erro ao enviar mensagem via WebSocket: {e}")
             import traceback
@@ -124,10 +128,16 @@ class WebSocketServer:
             self.loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self.loop)
             
+            # Cria função handler compatível que aceita websocket e path opcional
+            async def handler(websocket, path=None):
+                """Handler compatível que aceita websocket e path opcional."""
+                await self._handler_connection(websocket)
+            
             async def iniciar():
                 try:
+                    # Usa handler compatível
                     self.server = await websockets.serve(
-                        self._servidor_handler,
+                        handler,
                         self.host,
                         self.port,
                         ping_interval=20,
@@ -144,7 +154,7 @@ class WebSocketServer:
                         self.port = self.port + 1
                         try:
                             self.server = await websockets.serve(
-                                self._servidor_handler,
+                                handler,
                                 self.host,
                                 self.port
                             )

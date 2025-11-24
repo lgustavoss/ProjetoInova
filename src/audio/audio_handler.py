@@ -5,7 +5,7 @@ Gerenciador de funcionalidades de áudio.
 import threading
 from typing import Optional
 import speech_recognition as sr
-from playsound import playsound
+import pygame
 from pathlib import Path
 from src.config.config import Config
 
@@ -24,6 +24,11 @@ class AudioHandler:
         self.language = language or Config.LANGUAGE
         self.alert_sound_path = alert_sound_path or Config.ALERT_SOUND_PATH
         self.recognizer = sr.Recognizer()
+        # Inicializa pygame mixer para reprodução de áudio
+        try:
+            pygame.mixer.init()
+        except:
+            pass  # Se falhar, continua sem áudio
     
     def reconhecer_voz(self) -> Optional[str]:
         """
@@ -56,10 +61,17 @@ class AudioHandler:
         Reproduz um alerta sonoro em thread separada.
         """
         if self.alert_sound_path.exists():
-            threading.Thread(
-                target=lambda: playsound(str(self.alert_sound_path)),
-                daemon=True
-            ).start()
+            def _reproduzir():
+                try:
+                    pygame.mixer.music.load(str(self.alert_sound_path))
+                    pygame.mixer.music.play()
+                    # Aguarda até terminar a reprodução
+                    while pygame.mixer.music.get_busy():
+                        pygame.time.wait(100)
+                except Exception as e:
+                    print(f"Erro ao reproduzir alerta: {e}")
+            
+            threading.Thread(target=_reproduzir, daemon=True).start()
     
     def verificar_mensagem_critica(self, mensagem: str) -> bool:
         """

@@ -10,39 +10,166 @@ import numpy as np
 from PIL import Image, ImageTk
 from src.config.config import Config
 from src.data.gesto_repository import GestoRepository
+from src.data.database import Database
+from src.data.paciente_repository import PacienteRepository
 from src.audio.audio_handler import AudioHandler
 
 
 class MainWindow:
     """Janela principal da aplicação de reconhecimento de gestos."""
     
-    def __init__(self):
-        """Inicializa a janela principal."""
+    def __init__(self, repositorio: Optional[GestoRepository] = None, db: Optional[Database] = None, 
+                 paciente_repo: Optional[PacienteRepository] = None):
+        """
+        Inicializa a janela principal.
+        
+        Args:
+            repositorio: Repositório de gestos. Se None, cria um novo.
+            db: Instância do banco de dados. Se None, cria uma nova.
+            paciente_repo: Repositório de pacientes. Se None, cria um novo.
+        """
         self.root = tk.Tk()
-        self.repositorio = GestoRepository()
+        self.repositorio = repositorio or GestoRepository()
+        self.db = db or Database()
+        self.paciente_repo = paciente_repo or PacienteRepository(db=self.db)
         self.audio_handler = AudioHandler()
         self.gesto_atual = ()
         self.gesto_pendente: Optional[Tuple[tuple, str]] = None  # (chave, mensagem) aguardando confirmação
         self.callback_salvar: Optional[Callable] = None
         self.callback_enviar_gesto: Optional[Callable] = None  # Callback para enviar gesto via WebSocket
         self._restauracao_pendente = None  # ID do timer para cancelar restauração pendente
+        self.paciente_atual_id: Optional[int] = None  # ID do paciente selecionado
+        self.paciente_atual: Optional[dict] = None  # Dados do paciente selecionado
+        self._pacientes_dict: dict = {}  # Mapeia índice do combobox para dados do paciente
+        self.logo_photo = None  # Referência para a logo (evita garbage collection)
+        self.window_icon = None  # Referência para o ícone da janela (evita garbage collection)
         
         self._configurar_janela()
         self._criar_widgets()
-        self._atualizar_lista()
         self._atualizar_painel_gestos()
+        
+        # Agenda atualização periódica das configurações (a cada 5 segundos)
+        self._atualizar_configuracoes_periodicamente()
     
     def _configurar_janela(self):
         """Configura propriedades da janela."""
         self.root.title(Config.WINDOW_TITLE)
         self.root.geometry(Config.WINDOW_SIZE)
         self.root.configure(bg='#f0f0f0')
+        
+        # Configura ícone da janela (logo)
+        try:
+            if Config.LOGO_PATH.exists():
+                # Carrega e redimensiona a logo para o ícone (16x16 ou 32x32 são ideais)
+                icon_img = Image.open(Config.LOGO_PATH)
+                icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
+                # Salva como referência para não ser coletado pelo garbage collector
+                self.window_icon = ImageTk.PhotoImage(icon_img)
+                self.root.iconphoto(False, self.window_icon)
+        except Exception as e:
+            print(f"⚠️ Não foi possível carregar o ícone da janela: {e}")
     
     def _criar_widgets(self):
         """Cria os widgets da interface."""
+        # Header com logo e título
+        header_frame = tk.Frame(self.root, bg='white', relief=tk.FLAT)
+        header_frame.pack(fill="x", pady=0)
+        
+        # Container interno do header
+        header_content = tk.Frame(header_frame, bg='white')
+        header_content.pack(fill="x", padx=20, pady=15)
+        
+        # Logo no header
+        try:
+            if Config.LOGO_PATH.exists():
+                logo_img = Image.open(Config.LOGO_PATH)
+                logo_img = logo_img.resize((70, 70), Image.Resampling.LANCZOS)
+                self.logo_photo = ImageTk.PhotoImage(logo_img)
+                logo_label = tk.Label(
+                    header_content,
+                    image=self.logo_photo,
+                    bg='white'
+                )
+                logo_label.pack(side="left", padx=(0, 15))
+        except Exception as e:
+            print(f"⚠️ Não foi possível carregar a logo no header: {e}")
+            # Se não conseguir carregar, não adiciona nada
+        
+        # Título no header
+        title_frame = tk.Frame(header_content, bg='white')
+        title_frame.pack(side="left", fill="y")
+        
+        title_label = tk.Label(
+            title_frame,
+            text="HELP AI - Pacientes",
+            font=(Config.FONT_FAMILY, 24, "bold"),
+            bg='white',
+            fg='#4a90e2'
+        )
+        title_label.pack(anchor="w")
+        
+        subtitle_label = tk.Label(
+            title_frame,
+            text="Sistema de Reconhecimento de Gestos",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
+            bg='white',
+            fg='#666'
+        )
+        subtitle_label.pack(anchor="w")
+        
+        # Linha separadora
+        separator = tk.Frame(header_frame, bg='#4a90e2', height=3)
+        separator.pack(fill="x", pady=0)
+        
         # Container principal com duas colunas
         main_container = tk.Frame(self.root, bg='#f0f0f0')
         main_container.pack(fill="both", expand=True, padx=10, pady=10)
+        
+        # Frame superior: Seleção de paciente
+        frame_selecao_paciente = tk.Frame(main_container, bg='#e3f2fd', relief=tk.RAISED, bd=2)
+        frame_selecao_paciente.pack(fill="x", pady=(0, 10))
+        
+        tk.Label(
+            frame_selecao_paciente,
+            text="👤 Paciente:",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold"),
+            bg='#e3f2fd'
+        ).pack(side="left", padx=10, pady=8)
+        
+        self.combo_paciente = ttk.Combobox(
+            frame_selecao_paciente,
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
+            state="readonly",
+            width=40
+        )
+        self.combo_paciente.pack(side="left", padx=5, pady=8)
+        self.combo_paciente.bind("<<ComboboxSelected>>", self._on_paciente_selecionado)
+        
+        # Botão para atualizar lista de pacientes
+        btn_atualizar = tk.Button(
+            frame_selecao_paciente,
+            text="🔄 Atualizar",
+            command=self._atualizar_lista_pacientes,
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
+            bg='#4a90e2',
+            fg='white',
+            relief=tk.FLAT,
+            padx=10
+        )
+        btn_atualizar.pack(side="left", padx=5, pady=8)
+        
+        # Label de status do paciente selecionado
+        self.label_paciente_status = tk.Label(
+            frame_selecao_paciente,
+            text="⚠️ Nenhum paciente selecionado",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
+            bg='#e3f2fd',
+            fg='#f44336'
+        )
+        self.label_paciente_status.pack(side="right", padx=10, pady=8)
+        
+        # Carrega lista de pacientes
+        self._atualizar_lista_pacientes()
         
         # Coluna esquerda: Vídeo e confirmação
         left_frame = tk.Frame(main_container, bg='#f0f0f0')
@@ -102,7 +229,7 @@ class MainWindow:
         
         tk.Label(
             titulo_frame,
-            text="📋 Legenda de Gestos",
+            text="📋 Gestos Configurados",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_LARGE, "bold"),
             bg='#f0f0f0'
         ).pack(side="left")
@@ -135,123 +262,21 @@ class MainWindow:
         self.frame_gestos_cards = tk.Frame(self.canvas_gestos, bg='white')
         self.canvas_gestos.create_window((0, 0), window=self.frame_gestos_cards, anchor="nw")
         
-        # Frame de configuração (parte inferior direita)
-        frame_config = tk.LabelFrame(
-            right_frame,
-            text="⚙️ Configurações",
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
-            bg='#f0f0f0'
-        )
-        frame_config.pack(fill="x", pady=10)
+        # Nota informativa sobre configuração
+        info_frame = tk.Frame(right_frame, bg='#e3f2fd', relief=tk.FLAT, bd=1)
+        info_frame.pack(fill="x", pady=10, padx=5)
         
-        # Campo de entrada de mensagem
         tk.Label(
-            frame_config,
-            text="Mensagem:",
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
-            bg='#f0f0f0'
-        ).pack(anchor="w", padx=5, pady=2)
-        
-        self.entrada_mensagem = tk.Entry(
-            frame_config,
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
-            width=30
-        )
-        self.entrada_mensagem.pack(padx=5, pady=5, fill="x")
-        
-        # Botões de ação
-        btn_frame = tk.Frame(frame_config, bg='#f0f0f0')
-        btn_frame.pack(fill="x", padx=5, pady=5)
-        
-        self.btn_salvar = tk.Button(
-            btn_frame,
-            text="💾 Salvar Gesto",
-            command=self._on_salvar_gesto,
-            bg='#2196f3',
-            fg='white',
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
-        )
-        self.btn_salvar.pack(fill="x", pady=2)
-        
-        self.btn_voz = tk.Button(
-            btn_frame,
-            text="🎤 Falar Mensagem",
-            command=self._on_ouvir_mensagem,
-            bg='#ff9800',
-            fg='white',
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
-        )
-        self.btn_voz.pack(fill="x", pady=2)
-        
-        self.btn_exportar = tk.Button(
-            btn_frame,
-            text="📤 Exportar Gestos",
-            command=self._on_exportar_gestos,
-            bg='#9c27b0',
-            fg='white',
-            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL)
-        )
-        self.btn_exportar.pack(fill="x", pady=2)
-        
-        # Lista de gestos (oculta, mantida para compatibilidade)
-        self.lista_gestos = ttk.Treeview(
-            right_frame,
-            columns=("dedos", "mensagem"),
-            show="headings",
-            height=0  # Oculto
-        )
+            info_frame,
+            text="ℹ️ As mensagens são configuradas pelo enfermeiro no portal web.",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
+            bg='#e3f2fd',
+            fg='#1976d2',
+            wraplength=280,
+            justify=tk.CENTER
+        ).pack(pady=8, padx=5)
     
-    def _on_salvar_gesto(self):
-        """Callback para salvar gesto."""
-        mensagem = self.entrada_mensagem.get().strip()
-        
-        if not mensagem:
-            messagebox.showwarning("Aviso", "Por favor, digite uma mensagem.")
-            return
-        
-        if not self.gesto_atual:
-            messagebox.showwarning("Aviso", "Nenhum gesto detectado.")
-            return
-        
-        if self.repositorio.salvar_gesto(self.gesto_atual, mensagem):
-            self._atualizar_lista()
-            self._atualizar_painel_gestos()
-            messagebox.showinfo("Salvo", "✅ Novo gesto salvo com sucesso!")
-            self.entrada_mensagem.delete(0, tk.END)
-        else:
-            messagebox.showerror("Erro", "Não foi possível salvar o gesto.")
-    
-    def _on_ouvir_mensagem(self):
-        """Callback para reconhecimento de voz."""
-        messagebox.showinfo("Microfone", "Fale a mensagem agora...")
-        texto = self.audio_handler.reconhecer_voz()
-        
-        if texto:
-            self.entrada_mensagem.delete(0, tk.END)
-            self.entrada_mensagem.insert(0, texto)
-        else:
-            messagebox.showerror("Erro", "Não entendi o que foi dito.")
-    
-    def _on_exportar_gestos(self):
-        """Callback para exportar gestos."""
-        if self.repositorio.exportar_para_txt():
-            messagebox.showinfo(
-                "Exportado",
-                f"Gestos salvos em {Config.EXPORT_PATH}"
-            )
-        else:
-            messagebox.showerror("Erro", "Não foi possível exportar os gestos.")
-    
-    def _atualizar_lista(self):
-        """Atualiza a lista de gestos salvos."""
-        self.lista_gestos.delete(*self.lista_gestos.get_children())
-        
-        for dedos, mensagem in self.repositorio.obter_todos_gestos().items():
-            linha_dedos = '|'.join(map(str, dedos))
-            self.lista_gestos.insert('', 'end', values=(linha_dedos, mensagem))
-        
-        # Atualiza também o painel visual
-        self._atualizar_painel_gestos()
+    # Métodos de configuração removidos - agora feitos pelo portal do enfermeiro
     
     def atualizar_frame_video(self, frame_bgr):
         """
@@ -404,90 +429,220 @@ class MainWindow:
         # Remove destaque anterior
         for widget in self.frame_gestos_cards.winfo_children():
             if isinstance(widget, tk.Frame):
-                widget.config(bg='white', relief=tk.FLAT)
+                widget.config(bg='white', relief=tk.RAISED, bd=2, highlightthickness=0)
         
-        # Destaca gesto atual se existir
-        if chave in self.repositorio.obter_todos_gestos():
-            # Encontra o card correspondente e destaca
-            for idx, widget in enumerate(self.frame_gestos_cards.winfo_children()):
-                if isinstance(widget, tk.Frame) and hasattr(widget, 'gesto_chave'):
-                    if widget.gesto_chave == chave:
-                        widget.config(bg='#e3f2fd', relief=tk.RAISED, bd=3)
-                        break
+        # Conta quantos dedos estão estendidos
+        num_dedos = len(chave) if chave else 0
+        
+        # Encontra o card correspondente e destaca (por número de dedos ou chave antiga)
+        for widget in self.frame_gestos_cards.winfo_children():
+            if isinstance(widget, tk.Frame):
+                # Nova lógica: destaca por número de dedos
+                if hasattr(widget, 'gesto_num_dedos') and widget.gesto_num_dedos == num_dedos:
+                    widget.config(bg='#e3f2fd', relief=tk.RAISED, bd=4)
+                    # Adiciona animação visual
+                    widget.config(highlightbackground='#4a90e2', highlightthickness=2)
+                    break
+                # Fallback: lógica antiga por chave
+                elif hasattr(widget, 'gesto_chave') and widget.gesto_chave == chave:
+                    widget.config(bg='#e3f2fd', relief=tk.RAISED, bd=3)
+                    break
     
     
     def _atualizar_painel_gestos(self):
-        """Atualiza o painel visual de gestos disponíveis."""
+        """Atualiza o painel visual de gestos disponíveis com configurações do enfermeiro."""
         # Limpa cards existentes
         for widget in self.frame_gestos_cards.winfo_children():
             widget.destroy()
         
-        gestos = self.repositorio.obter_todos_gestos()
+        # Busca configurações simplificadas do banco (1, 2, 3, 4 dedos)
+        configs_gestos = self.db.listar_config_gestos()
+        configs_ativas = {c['num_dedos']: c['mensagem'] for c in configs_gestos if c.get('ativo', 1)}
         
-        if not gestos:
+        # Ícones para cada número de dedos
+        icones_dedos = {
+            1: "👆",
+            2: "✌️",
+            3: "🤟",
+            4: "🖐️"
+        }
+        
+        # Cores e ícones de prioridade
+        cores_prioridade = {
+            'baixa': ('#4caf50', '🟢', 'Baixa'),
+            'normal': ('#ffc107', '🟡', 'Normal'),
+            'alta': ('#ff9800', '🟠', 'Alta'),
+            'urgente': ('#f44336', '🔴', 'Urgente')
+        }
+        
+        if not configs_ativas:
+            # Se não houver configurações, mostra mensagem
             tk.Label(
                 self.frame_gestos_cards,
-                text="Nenhum gesto salvo.\nSalve gestos para aparecerem aqui.",
+                text="⏳ Aguardando configuração...\n\nO enfermeiro ainda não configurou os gestos.\nAs mensagens aparecerão aqui quando configuradas.",
                 font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
                 bg='white',
                 fg='gray',
-                justify=tk.CENTER
+                justify=tk.CENTER,
+                wraplength=280
             ).pack(pady=20)
         else:
-            for chave, mensagem in gestos.items():
+            # Exibe as configurações em ordem (1, 2, 3, 4)
+            for num_dedos in sorted([d for d in configs_ativas.keys() if d in [1, 2, 3, 4]]):
+                config = next((c for c in configs_gestos if c['num_dedos'] == num_dedos), None)
+                mensagem = configs_ativas[num_dedos]
+                prioridade = config.get('prioridade', 'normal') if config else 'normal'
+                icone = icones_dedos.get(num_dedos, "👋")
+                
+                # Obtém cor e ícone da prioridade
+                cor_prioridade, icone_prioridade, texto_prioridade = cores_prioridade.get(
+                    prioridade, cores_prioridade['normal']
+                )
+                
                 card = tk.Frame(
                     self.frame_gestos_cards,
                     bg='white',
                     relief=tk.RAISED,
                     bd=2,
-                    padx=10,
-                    pady=10
+                    padx=15,
+                    pady=15
                 )
-                card.pack(fill="x", padx=5, pady=5)
-                card.gesto_chave = chave  # Armazena chave para destacar depois
+                card.pack(fill="x", padx=5, pady=8)
+                card.gesto_num_dedos = num_dedos  # Armazena número de dedos para destacar depois
                 
-                # Ícone dos dedos com descrição visual
-                dedos_str = '|'.join(map(str, chave))
-                dedos_desc = self._obter_descricao_dedos(chave)
+                # Cabeçalho do card com ícone e número de dedos
+                header_frame = tk.Frame(card, bg='white')
+                header_frame.pack(fill="x", pady=(0, 8))
                 
                 tk.Label(
-                    card,
-                    text=f"👋 {dedos_str}",
-                    font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold"),
-                    bg='white'
-                ).pack(anchor="w")
+                    header_frame,
+                    text=f"{icone} {num_dedos} Dedo{'s' if num_dedos > 1 else ''}",
+                    font=(Config.FONT_FAMILY, Config.FONT_SIZE_LARGE, "bold"),
+                    bg='white',
+                    fg='#4a90e2'
+                ).pack(side="left")
                 
-                if dedos_desc:
-                    tk.Label(
-                        card,
-                        text=f"   ({dedos_desc})",
-                        font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 2),
-                        bg='white',
-                        fg='#666'
-                    ).pack(anchor="w")
+                tk.Label(
+                    header_frame,
+                    text=f"Solicitação {chr(64 + num_dedos)}",
+                    font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
+                    bg='white',
+                    fg='#666',
+                    padx=10
+                ).pack(side="left")
                 
-                # Mensagem
+                # Badge de prioridade
+                prioridade_frame = tk.Frame(card, bg=cor_prioridade, relief=tk.FLAT, bd=0)
+                prioridade_frame.pack(anchor="e", pady=(0, 5))
+                
+                tk.Label(
+                    prioridade_frame,
+                    text=f"{icone_prioridade} {texto_prioridade}",
+                    font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 2, "bold"),
+                    bg=cor_prioridade,
+                    fg='white',
+                    padx=8,
+                    pady=2
+                ).pack()
+                
+                # Mensagem configurada
                 tk.Label(
                     card,
                     text=f"💬 {mensagem}",
                     font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL),
                     bg='white',
                     wraplength=280,
-                    justify=tk.LEFT
-                ).pack(anchor="w", pady=2)
+                    justify=tk.LEFT,
+                    fg='#333'
+                ).pack(anchor="w", pady=(5, 10))
                 
                 # Instrução de envio
+                instrucao_frame = tk.Frame(card, bg='#e8f5e9', relief=tk.FLAT, bd=1)
+                instrucao_frame.pack(fill="x", pady=5)
+                
                 tk.Label(
-                    card,
-                    text="   → Faça gesto 👍 para enviar",
+                    instrucao_frame,
+                    text="🖐️ Abra a mão totalmente para enviar  |  ✊ Feche para cancelar",
                     font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 2, "italic"),
-                    bg='white',
-                    fg='#4caf50'
-                ).pack(anchor="w", pady=2)
+                    bg='#e8f5e9',
+                    fg='#2e7d32',
+                    padx=5,
+                    pady=3
+                ).pack()
         
         # Atualiza scroll
         self.frame_gestos_cards.update_idletasks()
         self.canvas_gestos.config(scrollregion=self.canvas_gestos.bbox("all"))
+    
+    def _atualizar_configuracoes_periodicamente(self):
+        """Atualiza as configurações de gestos periodicamente."""
+        self._atualizar_painel_gestos()
+        # Agenda próxima atualização em 5 segundos
+        self.root.after(5000, self._atualizar_configuracoes_periodicamente)
+    
+    def _atualizar_lista_pacientes(self):
+        """Atualiza a lista de pacientes no combobox."""
+        try:
+            # Lista todos os pacientes ativos (padrão) ou todos se não houver ativos
+            pacientes = self.paciente_repo.listar_pacientes(apenas_ativos=True)
+            
+            # Se não houver pacientes ativos, tenta listar todos
+            if not pacientes:
+                pacientes = self.paciente_repo.listar_pacientes(apenas_ativos=False)
+                print(f"⚠️ Nenhum paciente ativo encontrado. Listando todos os pacientes: {len(pacientes)} encontrado(s)")
+            valores = []
+            self._pacientes_dict = {}  # Mapeia índice do combobox para dados do paciente
+            
+            for idx, paciente in enumerate(pacientes):
+                nome_display = f"{paciente['nome']} - Quarto {paciente['quarto'] or 'N/A'}"
+                valores.append(nome_display)
+                self._pacientes_dict[idx] = paciente
+            
+            self.combo_paciente['values'] = valores
+            
+            # Se não houver paciente selecionado e houver pacientes disponíveis, seleciona o primeiro
+            if not self.paciente_atual_id and valores:
+                self.combo_paciente.current(0)
+                self._on_paciente_selecionado()
+            elif not valores:
+                self.combo_paciente.set("")
+                self.label_paciente_status.config(
+                    text="⚠️ Nenhum paciente cadastrado",
+                    fg='#f44336'
+                )
+        except Exception as e:
+            print(f"Erro ao atualizar lista de pacientes: {e}")
+            self.label_paciente_status.config(
+                text="❌ Erro ao carregar pacientes",
+                fg='#f44336'
+            )
+    
+    def _on_paciente_selecionado(self, event=None):
+        """Callback quando um paciente é selecionado."""
+        try:
+            indice = self.combo_paciente.current()
+            if indice >= 0 and indice in self._pacientes_dict:
+                paciente = self._pacientes_dict[indice]
+                self.paciente_atual_id = paciente['id']
+                self.paciente_atual = paciente
+                
+                nome_display = f"{paciente['nome']} - Quarto {paciente['quarto'] or 'N/A'}"
+                self.label_paciente_status.config(
+                    text=f"✅ {nome_display}",
+                    fg='#4caf50'
+                )
+                print(f"✅ Paciente selecionado: {nome_display} (ID: {self.paciente_atual_id})")
+            else:
+                self.paciente_atual_id = None
+                self.paciente_atual = None
+                self.label_paciente_status.config(
+                    text="⚠️ Nenhum paciente selecionado",
+                    fg='#f44336'
+                )
+        except Exception as e:
+            print(f"Erro ao selecionar paciente: {e}")
+            self.paciente_atual_id = None
+            self.paciente_atual = None
     
     def _obter_descricao_dedos(self, chave: tuple) -> str:
         """

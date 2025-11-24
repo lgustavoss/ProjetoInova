@@ -14,9 +14,11 @@ class Config:
     DATA_DIR = BASE_DIR
     
     # Arquivos
-    CSV_PATH = DATA_DIR / 'dados.csv'
+    CSV_PATH = DATA_DIR / 'dados.csv'  # Mantido para compatibilidade/migração
+    DB_PATH = DATA_DIR / 'banco_dados.db'  # Banco de dados SQLite
     EXPORT_PATH = DATA_DIR / 'gestos_exportados.txt'
     ALERT_SOUND_PATH = DATA_DIR / 'alerta.mp3'
+    LOGO_PATH = DATA_DIR / 'assets' / 'logo.png'  # Logo da aplicação
     
     # Configurações de vídeo
     CAMERA_INDEX = 0
@@ -25,7 +27,7 @@ class Config:
     LANGUAGE = 'pt-BR'
     
     # Configurações da interface
-    WINDOW_TITLE = "Painel do Paciente - Reconhecimento de Gestos"
+    WINDOW_TITLE = "HELP AI - Pacientes"
     WINDOW_SIZE = "1000x700"
     FONT_FAMILY = "Arial"
     FONT_SIZE_NORMAL = 12
@@ -44,9 +46,18 @@ class Config:
     CRITICAL_KEYWORDS = ['emergência', 'pânico', 'urgente']
     
     # Configurações WebSocket
-    WEBSOCKET_ENABLED = True
-    WEBSOCKET_HOST = "localhost"
-    WEBSOCKET_PORT = 8765
+    # Permite sobrescrever via variáveis de ambiente
+    import platform
+    # No Windows, usa localhost por padrão; no Linux pode usar 0.0.0.0
+    _default_host = '0.0.0.0' if platform.system() != 'Windows' else 'localhost'
+    WEBSOCKET_ENABLED = os.getenv('WEBSOCKET_ENABLED', 'True').lower() in ('true', '1', 'yes')
+    WEBSOCKET_HOST = os.getenv('WEBSOCKET_HOST', _default_host)
+    WEBSOCKET_PORT = int(os.getenv('WEBSOCKET_PORT', '8765'))
+    
+    # Configurações Servidor HTTP (para painel do enfermeiro)
+    HTTP_ENABLED = os.getenv('HTTP_ENABLED', 'True').lower() in ('true', '1', 'yes')
+    HTTP_PORT = int(os.getenv('HTTP_PORT', '8000'))
+    HTML_PATH = DATA_DIR / 'cliente_enfermeiro.html'
     
     # Informações do paciente (configurar conforme necessário)
     PACIENTE_ID = "PAC001"

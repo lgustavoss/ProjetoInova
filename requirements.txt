@@ -9,7 +9,9 @@ mediapipe>=0.10.0
 SpeechRecognition>=3.10.0
 
 # Reprodução de áudio
-playsound>=1.3.0
+# Usando versão fixa do playsound que funciona com Python 3.11+
+# Alternativa: pygame para reprodução de áudio multiplataforma
+pygame>=2.5.0
 
 # WebSocket para notificações em tempo real
 websockets>=11.0
