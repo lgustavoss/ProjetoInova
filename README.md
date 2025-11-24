@@ -91,9 +91,12 @@ A aplicação foi organizada seguindo o princípio de **Separação de Responsab
 ### 📋 Pré-requisitos
 
 #### Versão do Python
-- **Python 3.11.0 ou superior** (recomendado)
+- **Python 3.11.0** (versão recomendada e testada)
 - **Mínimo: Python 3.8** (compatibilidade limitada)
-- ⚠️ **Importante**: Versões anteriores a 3.8 não são suportadas
+- ⚠️ **Importante**: 
+  - Versões anteriores a 3.8 não são suportadas
+  - Versões superiores a 3.11 (3.12+) podem apresentar incompatibilidades com MediaPipe
+  - Recomenda-se usar **exatamente Python 3.11.0** para garantir compatibilidade total
 
 #### Verificar Versão do Python
 
@@ -238,7 +241,8 @@ which python    # Linux/Mac
 ## 📦 Dependências
 
 ### Requisitos do Sistema
-- **Python**: 3.11.0 ou superior (recomendado) / Mínimo: 3.8
+- **Python**: 3.11.0 (recomendado e testado) / Mínimo: 3.8
+  - ⚠️ Versões superiores a 3.11 podem ter incompatibilidades com MediaPipe
 - **pip**: Versão mais recente (será atualizado automaticamente)
 
 ### Bibliotecas Python
@@ -253,8 +257,8 @@ As dependências estão listadas no arquivo `requirements.txt`. Principais:
 - `Pillow>=10.0.0` - Processamento de imagens
 
 ### Módulos Padrão do Python (não precisam instalação)
-- `csv` - Manipulação de arquivos CSV
 - `os`, `sys` - Operações do sistema
+- `sqlite3` - Banco de dados SQLite (padrão do Python)
 - `tkinter` - Interface gráfica (pode precisar instalação no Linux: `sudo apt-get install python3-tk`)
 - `threading` - Execução paralela
 - `asyncio` - Programação assíncrona
@@ -311,9 +315,9 @@ As dependências estão listadas no arquivo `requirements.txt`. Principais:
 
 ### ⚠️ Requisitos Críticos
 - **Sempre ative o ambiente virtual antes de executar a aplicação**
-- O arquivo `dados.csv` é criado automaticamente se não existir
+- O banco de dados SQLite (`banco_dados.db`) é criado automaticamente se não existir
 - A aplicação **requer acesso à câmera web** para funcionar
-- **Python 3.11.0 ou superior é recomendado** para melhor compatibilidade
+- **Python 3.11.0 é recomendado** - versões superiores (3.12+) podem ter incompatibilidades com MediaPipe
 
 ### 🎯 Funcionalidades do Sistema
 - Gestos críticos (contendo palavras como "emergência", "pânico", "urgente") disparam alertas sonoros
@@ -333,7 +337,8 @@ As dependências estão listadas no arquivo `requirements.txt`. Principais:
 - Ou instale pip: `python -m ensurepip --upgrade`
 
 **Problema: Erro ao instalar dependências**
-- Certifique-se de que está usando Python 3.11 ou superior
+- Certifique-se de que está usando Python 3.11.0 (recomendado) ou versões 3.8-3.11
+- ⚠️ Versões superiores a 3.11 podem causar incompatibilidades com MediaPipe
 - Atualize o pip antes de instalar: `pip install --upgrade pip`
 - Tente instalar as dependências uma por uma para identificar o problema
 
