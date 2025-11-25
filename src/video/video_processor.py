@@ -14,7 +14,7 @@ from src.config.config import Config
 class VideoProcessor:
     """Processa vídeo da câmera e detecta gestos."""
     
-    def __init__(self, camera_index: int = None, callback_gesto: Optional[Callable] = None, callback_frame: Optional[Callable] = None, callback_mao_aberta: Optional[Callable] = None, callback_mao_fechada: Optional[Callable] = None):
+    def __init__(self, camera_index: int = None, callback_gesto: Optional[Callable] = None, callback_frame: Optional[Callable] = None, callback_mao_aberta: Optional[Callable] = None, callback_mao_fechada: Optional[Callable] = None, callback_estado_mao: Optional[Callable] = None):
         """
         Inicializa o processador de vídeo.
         
@@ -26,12 +26,15 @@ class VideoProcessor:
                             Recebe (frame_bgr) como argumento.
             callback_mao_aberta: Função chamada quando mão totalmente aberta é detectada (confirmação/envio).
             callback_mao_fechada: Função chamada quando mão fechada é detectada (cancelamento).
+            callback_estado_mao: Função chamada a cada frame para atualizar estado da mão.
+                                 Recebe (estado: str, detalhes: str) como argumentos.
         """
         self.camera_index = camera_index or Config.CAMERA_INDEX
         self.callback_gesto = callback_gesto
         self.callback_frame = callback_frame
         self.callback_mao_aberta = callback_mao_aberta
         self.callback_mao_fechada = callback_mao_fechada
+        self.callback_estado_mao = callback_estado_mao
         self.cap: Optional[cv2.VideoCapture] = None
         self.detector = GestureDetector()
         self.mp_draw = mp.solutions.drawing_utils
@@ -88,6 +91,7 @@ class VideoProcessor:
             result = self.detector.processar_frame(img_rgb)
             
             if result.multi_hand_landmarks:
+                # Há mão(s) detectada(s)
                 for idx, hand_landmarks in enumerate(result.multi_hand_landmarks):
                     # Desenha landmarks na imagem
                     self.mp_draw.draw_landmarks(
@@ -119,17 +123,10 @@ class VideoProcessor:
                             self.callback_mao_fechada()
                             self.ultimo_tempo_mao_fechada = tempo_atual
                         
-                        # Exibe informação na imagem
-                        texto = f"Mão {idx+1}: ✊ MÃO FECHADA (Cancelando...)"
-                        cv2.putText(
-                            img,
-                            texto,
-                            (10, 70 + idx * 30),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            1,
-                            (0, 0, 255),  # Vermelho para mão fechada
-                            2
-                        )
+                        # Notifica estado da mão (sem desenhar no frame)
+                        if self.callback_estado_mao:
+                            self.callback_estado_mao("fechada", f"Mão {idx+1}: ✊ MÃO FECHADA (Cancelando...)")
+                        
                         # PULA processamento como gesto normal quando é mão fechada
                         continue
                     
@@ -166,19 +163,13 @@ class VideoProcessor:
                             self.callback_mao_fechada()
                             self.ultimo_tempo_mao_fechada = tempo_atual
                         
-                        # Exibe informação na imagem
-                        texto = f"Mão {idx+1}: ✊ MÃO FECHADA"
-                        if self.aguardando_confirmacao:
-                            texto += " (Cancelando...)"
-                        cv2.putText(
-                            img,
-                            texto,
-                            (10, 70 + idx * 30),
-                            cv2.FONT_HERSHEY_SIMPLEX,
-                            1,
-                            (0, 0, 255),  # Vermelho para mão fechada
-                            2
-                        )
+                        # Notifica estado da mão (sem desenhar no frame)
+                        if self.callback_estado_mao:
+                            texto = f"Mão {idx+1}: ✊ MÃO FECHADA"
+                            if self.aguardando_confirmacao:
+                                texto += " (Cancelando...)"
+                            self.callback_estado_mao("fechada", texto)
+                        
                         # PULA processamento como gesto normal quando é mão fechada
                         continue
                     
@@ -263,21 +254,15 @@ class VideoProcessor:
                                 # Não faz nada além de atualizar o timestamp (já feito acima)
                                 pass
                             
-                            # Exibe informação na imagem
-                            texto = f"Mão {idx+1}: 🖐️ MÃO ABERTA (5 dedos)"
-                            if self.aguardando_confirmacao:
-                                texto += " (Confirmando...)"
-                            else:
-                                texto += " (Faça um gesto primeiro)"
-                            cv2.putText(
-                                img,
-                                texto,
-                                (10, 70 + idx * 30),
-                                cv2.FONT_HERSHEY_SIMPLEX,
-                                1,
-                                (0, 255, 0),  # Verde para mão aberta
-                                2
-                            )
+                            # Notifica estado da mão (sem desenhar no frame)
+                            if self.callback_estado_mao:
+                                texto = f"Mão {idx+1}: 🖐️ MÃO ABERTA (5 dedos)"
+                                if self.aguardando_confirmacao:
+                                    texto += " (Confirmando...)"
+                                else:
+                                    texto += " (Faça um gesto primeiro)"
+                                self.callback_estado_mao("aberta", texto)
+                            
                             # PULA processamento como gesto normal quando é mão totalmente aberta
                             continue
                     
@@ -344,17 +329,14 @@ class VideoProcessor:
                         self.ultimo_gesto_chamado = chave
                         self.ultimo_tempo_callback = tempo_atual
                     
-                    # Exibe informação na imagem
-                    texto = f"Mão {idx+1}: {chave}"
-                    cv2.putText(
-                        img,
-                        texto,
-                        (10, 70 + idx * 30),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        1,
-                        (0, 255, 0),
-                        2
-                    )
+                    # Notifica estado da mão com gesto detectado (sem desenhar no frame)
+                    if self.callback_estado_mao:
+                        num_dedos = len(chave) if chave else 0
+                        self.callback_estado_mao("gesto", f"Mão {idx+1}: {num_dedos} dedo(s) detectado(s)")
+            else:
+                # Nenhuma mão detectada
+                if self.callback_estado_mao:
+                    self.callback_estado_mao("nenhuma", "Nenhuma mão detectada - posicione a mão na frente da câmera")
             
             # Chama callback de frame se fornecido (para exibir na UI)
             if self.callback_frame:

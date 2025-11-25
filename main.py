@@ -123,6 +123,15 @@ def main():
             """Callback chamado para cada frame processado."""
             janela.atualizar_frame_video(frame_bgr)
         
+        # Callback para estado da mão (atualiza label de status)
+        def on_estado_mao(estado, mensagem):
+            """Callback chamado para atualizar o estado de detecção da mão."""
+            try:
+                # Usa after para garantir atualização thread-safe na UI
+                janela.root.after(0, lambda: janela.atualizar_status_deteccao(estado, mensagem))
+            except Exception as e:
+                pass  # Ignora erros durante fechamento da janela
+        
         # Variáveis para controle de gestos e estado
         ultimo_gesto_valido = None  # Último gesto válido armazenado para envio
         aguardando_confirmacao = False  # Estado de espera por confirmação ou cancelamento
@@ -426,7 +435,8 @@ def main():
             callback_gesto=on_gesto_detectado,
             callback_frame=on_frame_processado,
             callback_mao_aberta=on_mao_aberta_detectada,
-            callback_mao_fechada=on_mao_fechada_detectada
+            callback_mao_fechada=on_mao_fechada_detectada,
+            callback_estado_mao=on_estado_mao
         )
         processador_video.iniciar()
         

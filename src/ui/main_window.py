@@ -198,6 +198,20 @@ class MainWindow:
         )
         self.canvas_video.pack(pady=10)
         
+        # Label de status da detecção (abaixo do vídeo)
+        self.frame_status_deteccao = tk.Frame(left_frame, bg='#e3f2fd', relief=tk.GROOVE, bd=1)
+        self.frame_status_deteccao.pack(fill="x", padx=5, pady=(0, 5))
+        
+        self.label_status_deteccao = tk.Label(
+            self.frame_status_deteccao,
+            text="👁️ Aguardando detecção...",
+            font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold"),
+            bg='#e3f2fd',
+            fg='#1565c0',
+            pady=8
+        )
+        self.label_status_deteccao.pack(fill="x")
+        
         # Painel de status do gesto detectado
         self.frame_status_gesto = tk.Frame(left_frame, bg='#e8f5e9', relief=tk.RAISED, bd=2)
         self.frame_status_gesto.pack(fill="x", pady=10, padx=5)
@@ -281,6 +295,34 @@ class MainWindow:
         ).pack(pady=8, padx=5)
     
     # Métodos de configuração removidos - agora feitos pelo portal do enfermeiro
+    
+    def atualizar_status_deteccao(self, estado: str, mensagem: str):
+        """
+        Atualiza o status de detecção da mão.
+        
+        Args:
+            estado: Estado da detecção ('nenhuma', 'fechada', 'aberta', 'gesto').
+            mensagem: Mensagem descritiva do estado.
+        """
+        try:
+            # Cores para cada estado
+            cores_estado = {
+                'nenhuma': ('#e3f2fd', '#1565c0', '👁️'),  # Azul claro
+                'fechada': ('#ffebee', '#c62828', '✊'),    # Vermelho claro
+                'aberta': ('#e8f5e9', '#2e7d32', '🖐️'),   # Verde claro
+                'gesto': ('#fff3e0', '#e65100', '👆')      # Laranja claro
+            }
+            
+            cor_fundo, cor_texto, emoji = cores_estado.get(estado, cores_estado['nenhuma'])
+            
+            self.frame_status_deteccao.config(bg=cor_fundo)
+            self.label_status_deteccao.config(
+                text=f"{emoji} {mensagem}",
+                bg=cor_fundo,
+                fg=cor_texto
+            )
+        except Exception as e:
+            print(f"Erro ao atualizar status de detecção: {e}")
     
     def atualizar_frame_video(self, frame_bgr):
         """
