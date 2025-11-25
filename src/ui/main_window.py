@@ -58,6 +58,7 @@ class MainWindow:
         self.root.configure(bg='#f0f0f0')
         
         # Configura ícone da janela (logo)
+        # Nota: O AppUserModelID é definido no main.py ANTES de criar a janela
         try:
             import platform
             if platform.system() == 'Windows' and Config.ICON_PATH.exists():

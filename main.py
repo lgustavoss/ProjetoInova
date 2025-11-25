@@ -29,6 +29,17 @@ def main():
     ultimo_gesto_enviado = None
     ultimo_tempo_envio = 0
     
+    # No Windows, define AppUserModelID ANTES de criar qualquer janela
+    # Isso faz o ícone personalizado aparecer na barra de tarefas
+    try:
+        import platform
+        if platform.system() == 'Windows':
+            import ctypes
+            app_id = 'HelpAI.Pacientes.1.0'
+            ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID(app_id)
+    except Exception as e:
+        print(f"⚠️ Não foi possível definir AppUserModelID: {e}")
+    
     try:
         # Inicializa banco de dados
         db = Database()
