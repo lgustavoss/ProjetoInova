@@ -13,7 +13,7 @@
 
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #4a90e2 0%, #357abd 50%, #2e5c8a 100%);
+            background: linear-gradient(135deg, #00B4D8 0%, #0096C7 50%, #1B4965 100%);
             padding: 20px;
             min-height: 100vh;
         }
@@ -38,7 +38,7 @@
             gap: 25px;
             flex-wrap: wrap;
             box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-            border-bottom: 3px solid #4a90e2;
+            border-bottom: 3px solid #00B4D8;
         }
 
         .header-logo {
@@ -59,7 +59,7 @@
             margin-bottom: 5px;
             font-weight: 700;
             letter-spacing: 1px;
-            color: #4a90e2;
+            color: #1B4965;
         }
 
         .header p {
@@ -92,8 +92,8 @@
         }
 
         .tab-btn.active {
-            color: #4a90e2;
-            border-bottom-color: #4a90e2;
+            color: #00B4D8;
+            border-bottom-color: #00B4D8;
             background: white;
         }
 
@@ -162,7 +162,7 @@
         }
 
         .filtro-btn.ativo {
-            background-color: #4a90e2;
+            background-color: #00B4D8;
             color: white;
         }
 
@@ -206,8 +206,8 @@
         }
 
         .alerta.normal {
-            background-color: #e3f2fd;
-            border-color: #4a90e2;
+            background-color: #e0f7fa;
+            border-color: #00B4D8;
         }
 
         .alerta.resolvido {
@@ -241,12 +241,12 @@
         }
 
         .btn-resolver {
-            background-color: #4caf50;
-            color: white;
+            background-color: #90E0C3;
+            color: #1B4965;
         }
 
         .btn-resolver:hover {
-            background-color: #45a049;
+            background-color: #7dd3b5;
         }
 
         .btn-remover {
@@ -284,7 +284,7 @@
         }
 
         .btn-primary {
-            background-color: #4a90e2;
+            background-color: #00B4D8;
             color: white;
             padding: 12px 30px;
             border: none;
@@ -296,7 +296,7 @@
         }
 
         .btn-primary:hover {
-            background-color: #357abd;
+            background-color: #0096C7;
         }
 
         .pacientes-lista {
@@ -309,7 +309,7 @@
             margin: 10px 0;
             background: #f8f9fa;
             border-radius: 8px;
-            border-left: 4px solid #4a90e2;
+            border-left: 4px solid #00B4D8;
         }
 
         .paciente-item h3 {
@@ -328,12 +328,12 @@
             margin: 10px 0;
             background: #f8f9fa;
             border-radius: 8px;
-            border-left: 4px solid #4a90e2;
+            border-left: 4px solid #00B4D8;
         }
 
         .historico-item.resolvido {
-            border-left-color: #4caf50;
-            opacity: 0.8;
+            border-left-color: #90E0C3;
+            opacity: 0.9;
         }
 
         .vazio {
@@ -467,12 +467,12 @@
                 <h2 style="margin: 0;">Histórico de Solicitações</h2>
                 <div style="display: flex; align-items: center; gap: 10px; flex-wrap: wrap;">
                     <div id="historico-filtro-info" style="display: none;">
-                        <span id="historico-filtro-texto" style="background: #e3f2fd; padding: 8px 15px; border-radius: 20px; color: #1976d2; font-weight: bold;"></span>
-                        <button onclick="limparFiltroHistorico()" style="margin-left: 10px; padding: 8px 15px; background: #4a90e2; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                        <span id="historico-filtro-texto" style="background: #e0f7fa; padding: 8px 15px; border-radius: 20px; color: #1B4965; font-weight: bold;"></span>
+                        <button onclick="limparFiltroHistorico()" style="margin-left: 10px; padding: 8px 15px; background: #00B4D8; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
                             Ver Todos
                         </button>
                     </div>
-                    <button id="btn-marcar-todos-resolvido" onclick="marcarTodosComoResolvido()" style="display: none; padding: 8px 15px; background: #4caf50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.3s;" onmouseover="this.style.background='#45a049'" onmouseout="this.style.background='#4caf50'">
+                    <button id="btn-marcar-todos-resolvido" onclick="marcarTodosComoResolvido()" style="display: none; padding: 8px 15px; background: #90E0C3; color: #1B4965; border: none; border-radius: 5px; cursor: pointer; font-weight: bold; transition: all 0.3s;" onmouseover="this.style.background='#7dd3b5'" onmouseout="this.style.background='#90E0C3'"">
                         ✅ Marcar Todos como Resolvido
                     </button>
                 </div>
@@ -619,7 +619,7 @@
             
             alerta.innerHTML = `
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                    <span style="font-weight: bold; padding: 5px 15px; border-radius: 20px; background: ${data.prioridade === 'alta' ? '#f44336' : '#4a90e2'}; color: white;">
+                    <span style="font-weight: bold; padding: 5px 15px; border-radius: 20px; background: ${data.prioridade === 'alta' ? '#f44336' : '#00B4D8'}; color: white;">
                         ${icon} ${prioridadeTexto}
                     </span>
                     <span style="color: #666; font-size: 12px;">${formatarTimestamp(data.timestamp_iso || data.timestamp || '')}</span>
@@ -905,9 +905,9 @@
                 <div class="paciente-item" style="margin-bottom: 15px; padding: 15px; border: 1px solid #ddd; border-radius: 8px; background: white;">
                     <h3 style="margin-bottom: 10px;">
                         <span onclick="verHistoricoPaciente(${p.id}, '${p.nome.replace(/'/g, "\\'")}')" 
-                              style="color: #4a90e2; cursor: pointer; text-decoration: underline; transition: color 0.3s;" 
-                              onmouseover="this.style.color='#357abd'" 
-                              onmouseout="this.style.color='#4a90e2'"
+                              style="color: #00B4D8; cursor: pointer; text-decoration: underline; transition: color 0.3s;" 
+                              onmouseover="this.style.color='#0096C7'" 
+                              onmouseout="this.style.color='#00B4D8'"
                               title="Clique para ver histórico deste paciente">
                             📋 ${p.nome}
                         </span>
@@ -916,7 +916,7 @@
                     ${p.cpf ? `<p style="margin: 5px 0;">🆔 <strong>CPF:</strong> ${p.cpf}</p>` : ''}
                     ${p.telefone ? `<p style="margin: 5px 0;">📞 <strong>Telefone:</strong> ${p.telefone}</p>` : ''}
                     ${p.observacoes ? `<p style="margin: 5px 0;">📝 <strong>Observações:</strong> ${p.observacoes}</p>` : ''}
-                    <p style="margin: 5px 0; color: ${p.ativo === 1 ? '#4caf50' : '#999'};">
+                    <p style="margin: 5px 0; color: ${p.ativo === 1 ? '#00B4D8' : '#999'};">
                         ${p.ativo === 1 ? '✅ Ativo' : '❌ Inativo'}
                     </p>
                 </div>
@@ -1557,12 +1557,12 @@
                         <span style="color: #666; font-size: 13px; font-weight: bold;">${dataFormatada}</span>
                     </div>
                     <p style="margin: 10px 0; font-size: 15px; line-height: 1.5;">${h.mensagem}</p>
-                    ${dataResolucaoFormatada ? `<p style="margin: 5px 0; color: #4caf50; font-size: 12px; font-style: italic;">✅ Resolvido em: ${dataResolucaoFormatada}</p>` : ''}
+                    ${dataResolucaoFormatada ? `<p style="margin: 5px 0; color: #00B4D8; font-size: 12px; font-style: italic;">✅ Resolvido em: ${dataResolucaoFormatada}</p>` : ''}
                     <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px; flex-wrap: wrap;">
-                        <span style="display: inline-block; padding: 5px 10px; border-radius: 15px; background: ${h.prioridade === 'alta' || h.prioridade === 'urgente' ? '#f44336' : h.prioridade === 'normal' ? '#4a90e2' : '#4caf50'}; color: white; font-size: 12px; font-weight: bold;">
+                        <span style="display: inline-block; padding: 5px 10px; border-radius: 15px; background: ${h.prioridade === 'alta' || h.prioridade === 'urgente' ? '#f44336' : h.prioridade === 'normal' ? '#00B4D8' : '#90E0C3'}; color: white; font-size: 12px; font-weight: bold;">
                             ${h.prioridade === 'alta' || h.prioridade === 'urgente' ? '🔴 URGENTE' : h.prioridade === 'normal' ? '⚪ Normal' : '🟢 Baixa'}
                         </span>
-                        <span class="status-badge" style="display: inline-block; padding: 5px 10px; border-radius: 15px; background: ${h.status === 'resolvido' ? '#4caf50' : '#ff9800'}; color: white; font-size: 12px; font-weight: bold;">
+                        <span class="status-badge" style="display: inline-block; padding: 5px 10px; border-radius: 15px; background: ${h.status === 'resolvido' ? '#90E0C3' : '#ff9800'}; color: ${h.status === 'resolvido' ? '#1B4965' : 'white'}; font-size: 12px; font-weight: bold;">
                             ${h.status === 'resolvido' ? '✅ Resolvido' : '⏳ Pendente'}
                         </span>
                         ${h.status !== 'resolvido' ? `
@@ -1631,7 +1631,7 @@
                     }[prioridade] || 'Normal';
                     
                     mostrarStatus(`✅ Solicitação ${String.fromCharCode(64 + numDedos)} salva com sucesso! (${prioridadeTexto})`, 'sucesso');
-                    input.style.borderColor = '#4caf50';
+                    input.style.borderColor = '#90E0C3';
                     setTimeout(() => {
                         input.style.borderColor = '#ddd';
                     }, 2000);

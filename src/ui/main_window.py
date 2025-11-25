@@ -104,7 +104,7 @@ class MainWindow:
             text="HELP AI - Pacientes",
             font=(Config.FONT_FAMILY, 24, "bold"),
             bg='white',
-            fg='#4a90e2'
+            fg='#1B4965'
         )
         title_label.pack(anchor="w")
         
@@ -118,7 +118,7 @@ class MainWindow:
         subtitle_label.pack(anchor="w")
         
         # Linha separadora
-        separator = tk.Frame(header_frame, bg='#4a90e2', height=3)
+        separator = tk.Frame(header_frame, bg='#00B4D8', height=3)
         separator.pack(fill="x", pady=0)
         
         # Container principal com duas colunas
@@ -126,14 +126,14 @@ class MainWindow:
         main_container.pack(fill="both", expand=True, padx=10, pady=10)
         
         # Frame superior: Seleção de paciente
-        frame_selecao_paciente = tk.Frame(main_container, bg='#e3f2fd', relief=tk.RAISED, bd=2)
+        frame_selecao_paciente = tk.Frame(main_container, bg='#e0f7fa', relief=tk.RAISED, bd=2)
         frame_selecao_paciente.pack(fill="x", pady=(0, 10))
         
         tk.Label(
             frame_selecao_paciente,
             text="👤 Paciente:",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL, "bold"),
-            bg='#e3f2fd'
+            bg='#e0f7fa'
         ).pack(side="left", padx=10, pady=8)
         
         self.combo_paciente = ttk.Combobox(
@@ -151,7 +151,7 @@ class MainWindow:
             text="🔄 Atualizar",
             command=self._atualizar_lista_pacientes,
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
-            bg='#4a90e2',
+            bg='#00B4D8',
             fg='white',
             relief=tk.FLAT,
             padx=10
@@ -163,7 +163,7 @@ class MainWindow:
             frame_selecao_paciente,
             text="⚠️ Nenhum paciente selecionado",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
-            bg='#e3f2fd',
+            bg='#e0f7fa',
             fg='#f44336'
         )
         self.label_paciente_status.pack(side="right", padx=10, pady=8)
@@ -263,15 +263,15 @@ class MainWindow:
         self.canvas_gestos.create_window((0, 0), window=self.frame_gestos_cards, anchor="nw")
         
         # Nota informativa sobre configuração
-        info_frame = tk.Frame(right_frame, bg='#e3f2fd', relief=tk.FLAT, bd=1)
+        info_frame = tk.Frame(right_frame, bg='#e0f7fa', relief=tk.FLAT, bd=1)
         info_frame.pack(fill="x", pady=10, padx=5)
         
         tk.Label(
             info_frame,
             text="ℹ️ As mensagens são configuradas pelo enfermeiro no portal web.",
             font=(Config.FONT_FAMILY, Config.FONT_SIZE_NORMAL - 1),
-            bg='#e3f2fd',
-            fg='#1976d2',
+            bg='#e0f7fa',
+            fg='#1B4965',
             wraplength=280,
             justify=tk.CENTER
         ).pack(pady=8, padx=5)
@@ -439,13 +439,13 @@ class MainWindow:
             if isinstance(widget, tk.Frame):
                 # Nova lógica: destaca por número de dedos
                 if hasattr(widget, 'gesto_num_dedos') and widget.gesto_num_dedos == num_dedos:
-                    widget.config(bg='#e3f2fd', relief=tk.RAISED, bd=4)
+                    widget.config(bg='#e0f7fa', relief=tk.RAISED, bd=4)
                     # Adiciona animação visual
-                    widget.config(highlightbackground='#4a90e2', highlightthickness=2)
+                    widget.config(highlightbackground='#00B4D8', highlightthickness=2)
                     break
                 # Fallback: lógica antiga por chave
                 elif hasattr(widget, 'gesto_chave') and widget.gesto_chave == chave:
-                    widget.config(bg='#e3f2fd', relief=tk.RAISED, bd=3)
+                    widget.config(bg='#e0f7fa', relief=tk.RAISED, bd=3)
                     break
     
     
@@ -519,7 +519,7 @@ class MainWindow:
                     text=f"{icone} {num_dedos} Dedo{'s' if num_dedos > 1 else ''}",
                     font=(Config.FONT_FAMILY, Config.FONT_SIZE_LARGE, "bold"),
                     bg='white',
-                    fg='#4a90e2'
+                    fg='#00B4D8'
                 ).pack(side="left")
                 
                 tk.Label(
@@ -629,7 +629,7 @@ class MainWindow:
                 nome_display = f"{paciente['nome']} - Quarto {paciente['quarto'] or 'N/A'}"
                 self.label_paciente_status.config(
                     text=f"✅ {nome_display}",
-                    fg='#4caf50'
+                    fg='#00B4D8'
                 )
                 print(f"✅ Paciente selecionado: {nome_display} (ID: {self.paciente_atual_id})")
             else:
