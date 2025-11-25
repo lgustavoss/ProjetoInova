@@ -59,11 +59,14 @@ class MainWindow:
         
         # Configura ícone da janela (logo)
         try:
-            if Config.LOGO_PATH.exists():
-                # Carrega e redimensiona a logo para o ícone (16x16 ou 32x32 são ideais)
+            import platform
+            if platform.system() == 'Windows' and Config.ICON_PATH.exists():
+                # No Windows, usa arquivo .ico para melhor compatibilidade na barra de tarefas
+                self.root.iconbitmap(str(Config.ICON_PATH))
+            elif Config.LOGO_PATH.exists():
+                # Em outros sistemas, usa PNG via iconphoto
                 icon_img = Image.open(Config.LOGO_PATH)
                 icon_img = icon_img.resize((32, 32), Image.Resampling.LANCZOS)
-                # Salva como referência para não ser coletado pelo garbage collector
                 self.window_icon = ImageTk.PhotoImage(icon_img)
                 self.root.iconphoto(False, self.window_icon)
         except Exception as e:

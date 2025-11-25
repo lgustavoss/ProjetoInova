@@ -19,6 +19,7 @@ class Config:
     EXPORT_PATH = DATA_DIR / 'gestos_exportados.txt'
     ALERT_SOUND_PATH = DATA_DIR / 'alerta.mp3'
     LOGO_PATH = DATA_DIR / 'assets' / 'logo.png'  # Logo da aplicação
+    ICON_PATH = DATA_DIR / 'assets' / 'logo.ico'  # Ícone da aplicação (Windows)
     
     # Configurações de vídeo
     CAMERA_INDEX = 0
